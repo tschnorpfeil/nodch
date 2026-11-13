@@ -108,6 +108,14 @@ public enum IslandGeometry {
         return CGRect(x: (screen.midX - 15).rounded(), y: screen.maxY - height, width: 30, height: height)
     }
 
+    /// The display the island belongs on: the one under the pointer, where the person works, so a MacBook's notch does
+    /// not pull it away from an external display. Without a display under the pointer, `fallback` (the main display).
+    public static func screenIndex(frames: [CGRect], pointer: CGPoint, fallback: Int?) -> Int? {
+        // The top and right edges count too: a pointer pushed into the menu bar's corner sits on the frame's edge.
+        frames.firstIndex { $0.minX <= pointer.x && pointer.x <= $0.maxX && $0.minY <= pointer.y && pointer.y <= $0.maxY }
+            ?? fallback
+    }
+
     /// Where the island goes on one display: at its notch when it has one, below the middle of its menu bar otherwise.
     public static func placement(screen: CGRect, visible: CGRect, leftArea: CGRect?, rightArea: CGRect?, topInset: CGFloat) -> IslandPlacement {
         if let housing = housing(screen: screen, leftArea: leftArea, rightArea: rightArea, topInset: topInset) {
