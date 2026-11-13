@@ -15,6 +15,8 @@ enum IslandSnapshots {
         var hovering = false
         var level: Float = 0
         var drop = IslandDropZone.none
+        var answer: NodAnswer?
+        var picked: Set<String> = []
     }
 
     static let scenes: [Scene] = [
@@ -31,6 +33,13 @@ enum IslandSnapshots {
         Scene(name: "needs-you-tall", state: .needsYou(IslandSamples.tall, more: 0), open: true),
         Scene(name: "needs-you-cut", state: .needsYou(IslandSamples.cutNote, more: 2), open: true),
         Scene(name: "done", state: IslandSamples.done),
+        Scene(name: "done-markdown", state: IslandSamples.answerDone, answer: IslandSamples.answer),
+        Scene(name: "answer-open", state: IslandSamples.answerDone, open: true, prompt: PromptDraft(), answer: IslandSamples.answer),
+        Scene(name: "prompt-follow-up", state: .rest, open: true, prompt: PromptDraft(), answer: IslandSamples.answer),
+        Scene(name: "asks", state: .asks(IslandSamples.question)),
+        Scene(name: "asks-open", state: .asks(IslandSamples.question), open: true, prompt: PromptDraft(), answer: IslandSamples.question),
+        Scene(name: "asks-multiple-open", state: .asks(IslandSamples.picks), open: true, prompt: PromptDraft(),
+              answer: IslandSamples.picks, picked: ["p1", "p2"]),
         Scene(name: "failed", state: IslandSamples.failed),
         Scene(name: "failed-open", state: IslandSamples.failed, open: true),
         Scene(name: "prompt", state: .rest, open: true, prompt: PromptDraft()),
@@ -83,8 +92,9 @@ enum IslandSnapshots {
         window.appearance = NSAppearance(named: .darkAqua)
         window.contentView = canvas
 
-        let store = IslandStore(state: scene.state)
+        let store = IslandStore(state: scene.state, answer: scene.answer)
         let model = IslandModel(store: store)
+        model.picked = scene.picked
         model.hovering = scene.hovering
         model.isOpen = scene.open
         if let prompt = scene.prompt {

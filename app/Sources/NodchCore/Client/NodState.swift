@@ -97,6 +97,8 @@ public struct NodStateMapper: Sendable {
             return .working(WorkActivity(title: nil, step: nil, site: nil, since: Self.date(running.createdAt) ?? now,
                                          doing: running.status == "queued" ? .queued : .model))
         }
+        // A question Nod waits on outranks the "done" moment of the turn that asked it.
+        if let asked = answer(state), asked.question != nil { doneUntil = nil; return .asks(asked) }
         if let latest, latest.status == "failed", latest.source != "event", let previous,
            previous.turns.first(where: { $0.id == latest.id })?.status != "failed" {
             failedTurn = latest.id

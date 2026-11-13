@@ -8,5 +8,6 @@ import NodchCore
         presentation()
         hotkey()
         prompt()
+        answers()
     }
 }

@@ -16,7 +16,7 @@ struct IslandPanelView: View {
             VStack(alignment: .leading, spacing: IslandStyle.gap) {
                 if !layout.notch { header }
                 ZStack(alignment: .topLeading) {
-                    if model.showsPrompt || model.tone == .rest {
+                    if model.showsPrompt || model.tone == .rest || model.tone == .done || model.asking != nil {
                         IslandPromptCard(model: model, focused: $promptFocused).transition(.opacity)
                     } else {
                         IslandStatusCard(model: model).transition(.opacity)
@@ -117,7 +117,8 @@ struct IslandPanelView: View {
 
 /// The quick prompt: Return sends once, Escape discards. Opened with the shortcut it listens, and the words stream
 /// into the field; the first keystroke turns the microphone off and keeps them. Dropped files show as chips under
-/// the field. A failed send keeps the text and says why under it.
+/// the field. A failed send keeps the text and says why under it. Nod's last answer sits above the field while a
+/// follow-up still reads in context, and Nod's open question offers its choices there.
 struct IslandPromptCard: View {
     var model: IslandModel
     var focused: FocusState<Bool>.Binding
@@ -125,7 +126,10 @@ struct IslandPromptCard: View {
     var body: some View {
         let draft = model.draft
         VStack(alignment: .leading, spacing: 10) {
-            if model.tone != .rest {
+            if let answer = model.shownAnswer {
+                IslandAnswer(model: model, answer: answer)
+            }
+            if model.tone != .rest, model.tone != .done, model.asking == nil {
                 Text(statusLine).lineLimit(1).truncationMode(.tail)
                 .font(IslandStyle.small).foregroundStyle(IslandStyle.white(IslandStyle.secondary))
                 .accessibilityElement(children: .combine)
@@ -186,7 +190,11 @@ struct IslandPromptCard: View {
         switch draft.voice {
         case .starting: "Getting the microphone ready…"
         case .listening: "Listening… or type"
-        default: draft.attachments.isEmpty ? "Ask Nod…" : "Ask about the files…"
+        default:
+            if !draft.attachments.isEmpty { "Ask about the files…" }
+            else if model.asking != nil { "Or answer in your own words…" }
+            else if model.shownAnswer != nil { "Follow up…" }
+            else { "Ask Nod…" }
         }
     }
 
@@ -228,6 +236,69 @@ struct IslandPromptCard: View {
         case .working: "Working: \(model.line)"
         default: model.line
         }
+    }
+}
+
+/// Nod's answer in full, as Markdown, scrolling when it is long. On an open question its choices follow: one click
+/// answers a single-choice question; on a multiple-choice one the clicks tick choices and Send answers.
+struct IslandAnswer: View {
+    var model: IslandModel
+    let answer: NodAnswer
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            IslandScrollingArea(maxHeight: max(80, min(300, model.layout.maxContent - 190))) {
+                IslandMarkdown(text: answer.text)
+            }
+            if let question = answer.question {
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(question.choices) { choice in choiceButton(choice, multiple: question.multiple) }
+                }
+                .disabled(model.answeringQuestion || model.draft.sending)
+                if question.multiple {
+                    HStack {
+                        Spacer(minLength: 0)
+                        Button { model.sendPicks() } label: {
+                            HStack(spacing: 6) {
+                                if model.answeringQuestion { ProgressView().controlSize(.mini) }
+                                Text(model.draft.display.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Send" : "Send with my words")
+                            }
+                        }
+                        .buttonStyle(IslandButtonStyle(prominent: true))
+                        .disabled(model.picked.isEmpty || model.answeringQuestion || model.draft.sending)
+                    }
+                }
+            }
+        }
+        .id(answer.id)
+    }
+
+    private func choiceButton(_ choice: NodQuestion.Choice, multiple: Bool) -> some View {
+        let ticked = model.picked.contains(choice.id)
+        return Button { model.pick(choice) } label: {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                if multiple {
+                    Image(systemName: ticked ? "checkmark.square.fill" : "square").font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(ticked ? IslandStyle.accent : IslandStyle.white(IslandStyle.secondary))
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(choice.label).font(IslandStyle.body).foregroundStyle(IslandStyle.white(IslandStyle.primary))
+                    if let detail = choice.detail, !detail.isEmpty, detail.lowercased() != choice.label.lowercased() {
+                        Text(detail).font(IslandStyle.small).foregroundStyle(IslandStyle.white(IslandStyle.secondary))
+                    }
+                }
+                .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 11).padding(.vertical, 7)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: IslandStyle.wellRadius, style: .continuous)
+                .fill(ticked ? IslandStyle.accent.opacity(0.22) : IslandStyle.white(0.1)))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(choice.label)
+        .accessibilityAddTraits(ticked ? .isSelected : [])
     }
 }
 
@@ -400,19 +471,14 @@ struct IslandStatusCard: View {
             message(title: "Nod isn’t connected", text: offlineReason, prominentOpen: true)
         case .failed:
             message(title: "Nod couldn’t finish", text: model.line, prominentOpen: true)
-        case .done:
-            message(title: "Done", text: doneSummary, prominentOpen: false)
-        case .rest:
+        case .rest, .done:
+            // Shown by the prompt card, with the answer above the field.
             EmptyView()
         }
     }
 
     private var offlineReason: String? {
         if case .offline(let reason) = model.state { reason } else { nil }
-    }
-
-    private var doneSummary: String? {
-        if case .done(let summary) = model.state { summary } else { nil }
     }
 
     private var working: some View {

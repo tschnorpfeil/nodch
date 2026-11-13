@@ -98,6 +98,32 @@ enum IslandSamples {
     static let failed = IslandState.failed(message: "The browser session expired while filling in the form. Sign in again in Nod, then retry from there.")
     static let offline = IslandState.offline(reason: "Nod isn’t running, or it doesn’t answer on localhost.")
     static let done = IslandState.done(summary: "Expense report sent to finance")
+
+    /// A Markdown answer as Nod writes it: the wing must read it as plain text, the card render it.
+    static let answer = NodAnswer(id: "demo-answer-1", text: """
+        **Morgen ist Samstag, der 14. November.** Ich sehe deinen Kalender:
+
+        - 10:00 *Laufen* mit Ana
+        - 14:30 `Zahnarzt` (Dr. Weber)
+
+        ### Offen
+        1. Die Rechnung von **Stadtwerke** ist am Montag fällig.
+        2. Bens Geburtstag ist am Sonntag.
+
+        > Tipp: Sag „erinner mich“, dann trage ich es ein.
+        """, at: Date())
+    static let answerDone = IslandState.done(summary: answer.text)
+    static let question = NodAnswer(id: "demo-question-1", text: "Wann soll ich den Termin bei **Dr. Weber** verschieben?",
+                                    at: Date(), question: NodQuestion(choices: [
+                                        .init(id: "q1", label: "Nächste Woche", detail: "Dienstag oder Mittwoch vormittags"),
+                                        .init(id: "q2", label: "Übernächste Woche"),
+                                        .init(id: "q3", label: "Gar nicht, absagen"),
+                                    ], multiple: false))
+    static let picks = NodAnswer(id: "demo-question-2", text: "Welche E-Mails soll ich archivieren?", at: Date(),
+                                 question: NodQuestion(choices: [
+                                     .init(id: "p1", label: "Newsletter"), .init(id: "p2", label: "Benachrichtigungen"),
+                                     .init(id: "p3", label: "Rechnungen", detail: "erst nach dem Bezahlen"),
+                                 ], multiple: true))
 }
 
 /// Fake actions for `--demo`: they log what a real session would send to Nod and move the demo along, nothing else.
@@ -202,6 +228,7 @@ final class DemoScript {
         case .rest: "rest"
         case .working(let a): "working(\(a.step ?? a.title ?? "-"))"
         case .needsYou(let a, let more): "needsYou(\(a.id), more: \(more))"
+        case .asks(let a): "asks(\(a.id))"
         case .done: "done"
         case .failed: "failed"
         }

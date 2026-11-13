@@ -84,6 +84,14 @@ import Observation
         if case .needsYou(let approval, let more) = store.state { (approval, more) } else { nil }
     }
     var activity: WorkActivity? { if case .working(let activity) = store.state { activity } else { nil } }
+    /// Nod's question that waits for the person's pick or own words.
+    var asking: NodAnswer? { if case .asks(let answer) = store.state { answer } else { nil } }
+    /// The answer above the prompt field: the open question, or the last answer while a follow-up still reads in context.
+    var shownAnswer: NodAnswer? { IslandPresentation.shownAnswer(store.answer, state: store.state) }
+    /// Choices ticked on a question that takes several.
+    var picked: Set<String> = []
+    /// A pick is on its way to Nod.
+    private(set) var answeringQuestion = false
 
     static let notConnected = "nodch isn’t connected to Nod yet."
 
@@ -165,12 +173,53 @@ import Observation
         }
     }
 
+    /// A choice on Nod's question. On a single-choice question the click is the answer; otherwise it ticks the choice.
+    func pick(_ choice: NodQuestion.Choice) {
+        guard let asked = asking, let question = asked.question, !answeringQuestion else { return }
+        // A card that just appeared by itself ignores clicks for a moment, like an approval.
+        guard IslandPresentation.acceptsAnswer(shownFor: Date().timeIntervalSince(approvalShownAt)) else { return }
+        guard question.multiple else { answer(asked, choices: [choice], text: ""); return }
+        if picked.contains(choice.id) { picked.remove(choice.id) } else { picked.insert(choice.id) }
+    }
+
+    /// Sends the ticked choices of a multiple-choice question, with the words in the field if there are any.
+    func sendPicks() {
+        guard let asked = asking, let question = asked.question, !picked.isEmpty else { return }
+        answer(asked, choices: question.choices.filter { picked.contains($0.id) }, text: draft.display)
+    }
+
+    /// One answer to Nod's question, from one click. The field's words go with it and are cleared once Nod has it.
+    private func answer(_ asked: NodAnswer, choices: [NodQuestion.Choice], text: String) {
+        guard let actions = store.actions else { draft.sendFailed(Self.notConnected); return }
+        guard !answeringQuestion, !draft.sending else { return }
+        answeringQuestion = true
+        let keepsText = !text.isEmpty
+        Task {
+            do {
+                try await actions.answer(question: asked, choices: choices, text: text)
+                picked = []
+                if keepsText { perform(draft.escape()) }
+            } catch {
+                draft.sendFailed(Self.describe(error))
+            }
+            answeringQuestion = false
+        }
+    }
+
     private func send(_ prompt: String, _ attachments: [NodAttachment]) {
         guard let actions = store.actions else { draft.sendFailed(Self.notConnected); return }
         let token = draft.sendToken
+        // Words typed under Nod's open question answer it, as Nod's own composer does; files go out as a new message.
+        let asked = attachments.isEmpty ? asking : nil
+        let choices = asked?.question.map { question in question.choices.filter { picked.contains($0.id) } } ?? []
         Task {
             do {
-                try await actions.send(prompt: prompt, attachments: attachments)
+                if let asked {
+                    try await actions.answer(question: asked, choices: asked.question?.multiple == true ? choices : [], text: prompt)
+                    picked = []
+                } else {
+                    try await actions.send(prompt: prompt, attachments: attachments)
+                }
                 if draft.sent(token: token) { onSent() }
             } catch {
                 draft.sendFailed(Self.describe(error), token: token)

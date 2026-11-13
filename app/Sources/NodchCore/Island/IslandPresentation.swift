@@ -32,6 +32,8 @@ public struct IslandWing: Equatable, Sendable {
 public enum IslandPresentation {
     /// How long "done" shows before the island goes back to rest.
     public static let doneDuration: TimeInterval = 3.5
+    /// How long the last answer stays above the prompt, so a follow-up reads in context (as in Pippa).
+    public static let followUpWindow: TimeInterval = 10 * 60
     /// An approval card that just appeared ignores Approve and Decline for this long, so a click meant for whatever
     /// was under the pointer cannot answer it.
     public static let answerGuard: TimeInterval = 0.8
@@ -44,7 +46,7 @@ public enum IslandPresentation {
         case .offline: .offline
         case .rest: .rest
         case .working: .working
-        case .needsYou: .needsYou
+        case .needsYou, .asks: .needsYou
         case .done: (doneAge ?? 0) >= doneDuration ? .rest : .done
         case .failed: .failed
         }
@@ -66,8 +68,25 @@ public enum IslandPresentation {
             case .tool: return "Working…"
             }
         case .needsYou(let approval, _): return nonEmpty(approval.title) ?? "Nod needs you"
-        case .done(let summary): return nonEmpty(summary) ?? "Done"
+        case .asks(let answer): return nonEmpty(MarkdownPlain.line(answer.text)) ?? "Nod has a question"
+        case .done(let summary): return nonEmpty(summary.map(MarkdownPlain.line)) ?? "Done"
         case .failed(let message): return nonEmpty(message) ?? "Something went wrong"
+        }
+    }
+
+    /// The answer the prompt shows above its field: an open question always, otherwise a recent answer.
+    public static func shownAnswer(_ answer: NodAnswer?, state: IslandState, now: Date = Date()) -> NodAnswer? {
+        if case .asks(let asked) = state { return asked }
+        guard let answer, now.timeIntervalSince(answer.at) < followUpWindow else { return nil }
+        return answer
+    }
+
+    /// What the person is asked to decide right now: an approval or Nod's question, by id.
+    public static func waitingID(_ state: IslandState) -> String? {
+        switch state {
+        case .needsYou(let approval, _): "approval:" + approval.id
+        case .asks(let answer): "question:" + answer.id
+        default: nil
         }
     }
 
@@ -93,6 +112,7 @@ public enum IslandPresentation {
         case .working: return IslandWing(showsElapsed: true, showsStop: true)
         case .needsYou:
             if case .needsYou(_, let more) = state { return IslandWing(more: max(0, more), showsChevron: more <= 0) }
+            if case .asks = state { return IslandWing(showsChevron: true) }
             return IslandWing(showsChevron: true)
         case .done, .failed: return IslandWing()
         }
@@ -113,14 +133,15 @@ public enum IslandPresentation {
     /// What a change of state does to the card. `open`: why the card is open now, nil when it is closed.
     /// - A new approval (or another one) reveals the card, without the keyboard, unless the person has it open already.
     /// - When the approval it opened for is gone, a card that opened by itself closes again.
-    /// - A card left on a state that has nothing to show (rest) closes.
+    /// - A card left on a state that has nothing to show (rest) closes; one that shows an answer stays for reading.
     public static func reaction(from old: IslandState, to new: IslandState, open: OpenCause?) -> Reaction {
-        let oldID: String? = if case .needsYou(let a, _) = old { a.id } else { nil }
-        if case .needsYou(let approval, _) = new {
-            guard approval.id != oldID else { return .none }
+        let oldID = waitingID(old)
+        if let newID = waitingID(new) {
+            guard newID != oldID else { return .none }
             return open == nil ? .reveal : .none
         }
         if oldID != nil, open == .approval { return .conceal }
+        if case .done = old { return .none }
         if case .rest = new, open == .click, tone(old) != .rest { return .conceal }
         return .none
     }

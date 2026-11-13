@@ -104,8 +104,9 @@ final class IslandController {
             doneTimer = nil
             model.doneExpired = false
         }
-        let oldID: String? = if case .needsYou(let a, _) = old { a.id } else { nil }
-        if oldID != model.approval?.0.id { model.actionError = nil; model.approvalShownAt = Date() }
+        if IslandPresentation.waitingID(old) != IslandPresentation.waitingID(new) {
+            model.actionError = nil; model.approvalShownAt = Date(); model.picked = []
+        }
         if case .working = new {} else if case .working = old { model.actionError = nil }
         switch IslandPresentation.reaction(from: old, to: new, open: openCause) {
         case .reveal: open(.approval)
@@ -202,12 +203,14 @@ final class IslandController {
             model.showsPrompt = true
             model.perform(model.draft.open(cause == .hotkey ? .hotkey : .drop))
         case .click:
-            model.showsPrompt = model.tone == .rest
+            // At rest, right after an answer and on Nod's question the card is the prompt, with the answer above it.
+            model.showsPrompt = model.tone == .rest || model.tone == .done || model.asking != nil
             if model.showsPrompt { model.perform(model.draft.open(.click)) }
         case .approval:
             // The person may be typing in the prompt they opened: the approval waits in the wing for them.
             if model.isOpen, model.showsPrompt { return }
-            model.showsPrompt = false
+            // Nod's question is answered in the prompt card; an approval has its own card.
+            model.showsPrompt = model.asking != nil
         }
         openCause = cause
         model.isOpen = true
@@ -218,8 +221,6 @@ final class IslandController {
 
     private func compactClicked() {
         if model.isOpen { presenter.close(); return }
-        // Right after a turn the click goes to Nod, where the result is.
-        if model.tone == .done { model.openNod(); return }
         open(.click)
     }
 

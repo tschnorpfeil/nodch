@@ -94,6 +94,8 @@ public enum IslandState: Equatable, Sendable {
     case working(WorkActivity)
     /// Nod waits for the user. `more` counts further pending approvals.
     case needsYou(PendingApproval, more: Int)
+    /// Nod asked a question with answer choices and waits for the person's pick or own words.
+    case asks(NodAnswer)
     /// A turn just finished; the UI shows it briefly, then returns to rest.
     case done(summary: String?)
     case failed(message: String)
