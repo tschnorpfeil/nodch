@@ -210,6 +210,27 @@ public struct PromptDraft: Equatable, Sendable {
         return [.send(prompt: prompt, attachments: files)]
     }
 
+    /// A click on one of Nod's choices goes out like a send: the microphone goes off (its words stay), the field and
+    /// Return wait, and the outcome lands only on this draft. Nil while another send is out.
+    public mutating func answerChoice() -> [PromptEffect]? {
+        guard !sending, voice != .finishing else { return nil }
+        let effects: [PromptEffect] = voice.isActive ? [.stopVoice(finalize: false)] : []
+        keepVolatile()
+        if voice.isActive { voice = .off }
+        sending = true
+        sendToken = nextID
+        nextID += 1
+        error = nil
+        notice = nil
+        return effects
+    }
+
+    /// Nod took a choice that went without the field's words: the field opens again with them.
+    public mutating func answeredKeepingText(token: Int) {
+        guard sending, token == sendToken else { return }
+        sending = false
+    }
+
     /// Nod took the message: the prompt starts empty next time. False when no send was out (it was discarded).
     /// `token`: the `sendToken` the send went out with; nil means the current one.
     public mutating func sent(token: Int? = nil) -> Bool {

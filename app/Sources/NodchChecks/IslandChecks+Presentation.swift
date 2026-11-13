@@ -26,7 +26,8 @@ extension IslandChecks {
         check(P.reaction(from: working, to: a, open: .hotkey) == .none, "presentation: an approval does not take over the open prompt")
         check(P.reaction(from: a, to: working, open: .approval) == .conceal, "presentation: an answered approval closes the card it opened")
         check(P.reaction(from: a, to: working, open: .click) == .none, "presentation: a card the person opened stays")
-        check(P.reaction(from: .done(summary: nil), to: .rest, open: .click) == .conceal, "presentation: a status card closes at rest")
+        check(P.reaction(from: .failed(message: "x"), to: .rest, open: .click) == .conceal, "presentation: a status card closes at rest")
+        check(P.reaction(from: .done(summary: "x"), to: .rest, open: .click) == .none, "presentation: an answer stays open for reading at rest")
         check(P.reaction(from: .rest, to: .rest, open: .hotkey) == .none, "presentation: the prompt stays open at rest")
 
         // Done returns to rest.

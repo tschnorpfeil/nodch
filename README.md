@@ -9,6 +9,8 @@ leaves everything else to Nod:
 
 - Shows what Nod is doing right now.
 - Lets you approve or decline what Nod asks before it acts, with the full action text.
+- Shows Nod's answer in full, with its formatting, and keeps it above the prompt for ten minutes so you can follow up.
+  When Nod asks you to choose, the choices are buttons; your own words answer it too.
 - Opens a quick prompt with a global shortcut (⌥Space). It starts listening: speak, and the words appear in the field.
   The first key you type turns the microphone off and keeps the text. Return sends, Esc discards.
 - Takes files dropped on the island and sends them to Nod with your prompt.

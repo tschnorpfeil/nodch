@@ -54,6 +54,38 @@ public struct NodAttachment: Equatable, Sendable, Identifiable {
     }
 }
 
+/// A question Nod waits on, mapped from a message's `answerChoices` (src/shared/answer-choices.ts).
+public struct NodQuestion: Equatable, Sendable {
+    public struct Choice: Equatable, Sendable, Identifiable {
+        public var id: String
+        public var label: String
+        /// Nod's optional `description` for the choice.
+        public var detail: String?
+
+        public init(id: String, label: String, detail: String? = nil) { self.id = id; self.label = label; self.detail = detail }
+    }
+    public var choices: [Choice]
+    /// The person may pick several choices; otherwise exactly one, or only their own words.
+    public var multiple: Bool
+
+    public init(choices: [Choice], multiple: Bool) { self.choices = choices; self.multiple = multiple }
+}
+
+/// Nod's latest answer in the conversation: the newest assistant message with text and without an approval.
+public struct NodAnswer: Equatable, Sendable, Identifiable {
+    /// The message id; Nod expects it as `replyToMessageId` when the person answers the question.
+    public var id: String
+    /// Full text, Markdown as Nod wrote it.
+    public var text: String
+    public var at: Date
+    /// Set only while Nod waits for the person to pick (answerChoicesPending, or listed in pendingAnswerChoiceMessageIds).
+    public var question: NodQuestion?
+
+    public init(id: String, text: String, at: Date, question: NodQuestion? = nil) {
+        self.id = id; self.text = text; self.at = at; self.question = question
+    }
+}
+
 public enum IslandState: Equatable, Sendable {
     /// Nod cannot be reached or rejected the credentials.
     case offline(reason: String)
@@ -62,6 +94,8 @@ public enum IslandState: Equatable, Sendable {
     case working(WorkActivity)
     /// Nod waits for the user. `more` counts further pending approvals.
     case needsYou(PendingApproval, more: Int)
+    /// Nod asked a question with answer choices and waits for the person's pick or own words.
+    case asks(NodAnswer)
     /// A turn just finished; the UI shows it briefly, then returns to rest.
     case done(summary: String?)
     case failed(message: String)
@@ -74,6 +108,8 @@ public enum IslandState: Equatable, Sendable {
     /// Uploads one file the person dropped on the island. Nothing is sent until they send the prompt.
     func upload(file: URL) async throws -> NodAttachment
     func answer(approval: PendingApproval, approved: Bool) async throws
+    /// Answers Nod's open question with the picked `choices` and/or the person's own `text`. One action per click, never repeated.
+    func answer(question: NodAnswer, choices: [NodQuestion.Choice], text: String) async throws
     func stop() async throws
     /// Opens Nod's own window, e.g. "/" or "/vault".
     func openNod(path: String)
@@ -81,7 +117,11 @@ public enum IslandState: Equatable, Sendable {
 
 @MainActor @Observable public final class IslandStore {
     public var state: IslandState
+    /// Nod's latest answer, set on every state fetch.
+    public var answer: NodAnswer?
     public weak var actions: NodActions?
 
-    public init(state: IslandState = .offline(reason: "Not connected")) { self.state = state }
+    public init(state: IslandState = .offline(reason: "Not connected"), answer: NodAnswer? = nil) {
+        self.state = state; self.answer = answer
+    }
 }
