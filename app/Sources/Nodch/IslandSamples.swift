@@ -91,7 +91,7 @@ enum IslandSamples {
             DroppedFile(url: folder.appendingPathComponent($0), isDirectory: false)
         })
         draft.uploaded(1, as: NodAttachment(id: "demo-upload-1", name: "Q4 report.pdf", mimeType: "application/pdf", size: 482_133))
-        draft.uploadFailed(3, reason: "Nod refused it: larger than 25 MB.")
+        draft.uploadFailed(3, reason: "Choose a file between 1 byte and 90 MiB to upload.")
         return draft
     }
 

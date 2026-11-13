@@ -10,7 +10,7 @@ public enum VoiceHint: Equatable, Sendable {
 
     public var text: String {
         switch self {
-        case .microphoneDenied: "Voice is off: nodch may not use the microphone."
+        case .microphoneDenied: "Voice is off: allow nodch in System Settings › Privacy › Microphone."
         case .noMicrophone: "Voice is off: no microphone found."
         case .speechUnavailable: "Voice isn’t available for this language."
         case .preparing: "Voice is getting ready: macOS is loading the speech model."
