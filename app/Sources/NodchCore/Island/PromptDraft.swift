@@ -6,7 +6,7 @@ import Foundation
 
 /// Why voice input is off by itself. The card says so in one quiet line and works with the keyboard.
 public enum VoiceHint: Equatable, Sendable {
-    case microphoneDenied, noMicrophone, speechUnavailable, preparing, failed
+    case microphoneDenied, noMicrophone, speechUnavailable, preparing, failed, noSpeech
 
     public var text: String {
         switch self {
@@ -15,6 +15,7 @@ public enum VoiceHint: Equatable, Sendable {
         case .speechUnavailable: "Voice isn’t available for this language."
         case .preparing: "Voice is getting ready: macOS is loading the speech model."
         case .failed: "Voice is off: the microphone didn’t start."
+        case .noSpeech: "No speech heard. Try again or type."
         }
     }
 }
@@ -24,7 +25,7 @@ public enum VoiceState: Equatable, Sendable {
     /// Asked for: permission, speech model and microphone are being checked.
     case starting
     case listening
-    /// Return was pressed: the microphone is off, the last words are being finalized, then the prompt goes out.
+    /// The microphone is off and the last words are being finalized.
     case finishing
     case unavailable(VoiceHint)
 
@@ -86,6 +87,10 @@ public struct PromptDraft: Equatable, Sendable {
     public private(set) var notice: String?
     /// Names the send that is out. A discarded draft's send that finishes late carries an older token and is ignored.
     public private(set) var sendToken = 0
+    public private(set) var voiceReady = false
+    private var sendAfterFinish = false
+    private var noSpeech = false
+    private var heardSpeech = false
     private var nextID = 1
 
     public init(text: String = "") { self.text = text }
@@ -138,6 +143,9 @@ public struct PromptDraft: Equatable, Sendable {
     public mutating func startVoice() -> [PromptEffect] {
         guard !sending, voice != .finishing, !voice.isActive else { return [] }
         voice = .starting
+        voiceReady = false
+        noSpeech = false
+        heardSpeech = false
         fieldText = display
         return [.startVoice]
     }
@@ -145,9 +153,16 @@ public struct PromptDraft: Equatable, Sendable {
     /// The microphone button.
     public mutating func toggleVoice() -> [PromptEffect] {
         guard voice.isActive else { return startVoice() }
-        keepVolatile()
-        voice = .off
-        return [.stopVoice(finalize: false)]
+        return finishVoice()
+    }
+
+    /// Stop listening and finalize the words without sending.
+    public mutating func finishVoice(noSpeech: Bool = false) -> [PromptEffect] {
+        guard voice.isActive else { return [] }
+        self.noSpeech = noSpeech
+        sendAfterFinish = false
+        voice = .finishing
+        return [.stopVoice(finalize: true)]
     }
 
     /// Another dictation language was chosen. A microphone that is on, or that the old language kept off, starts
@@ -183,6 +198,7 @@ public struct PromptDraft: Equatable, Sendable {
     /// Words from the transcriber. Volatile ones replace each other; final ones are kept.
     public mutating func heard(_ words: String, final: Bool) {
         guard voice == .listening || voice == .finishing else { return }
+        if !words.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { heardSpeech = true }
         if final {
             text = Self.join(text, words)
             volatile = ""
@@ -194,10 +210,13 @@ public struct PromptDraft: Equatable, Sendable {
     /// The person edited the field. The first keystroke while the microphone is on turns it off and keeps the
     /// transcript, so they go on typing where the voice left off.
     public mutating func typed(_ value: String) -> [PromptEffect] {
-        guard value != display, !sending, voice != .finishing else { return [] }
-        let effects: [PromptEffect] = voice.isActive ? [.stopVoice(finalize: false)] : []
-        if voice.isActive {
+        guard value != display, !sending else { return [] }
+        let takingOver = voice.isActive || voice == .finishing
+        let effects: [PromptEffect] = takingOver ? [.stopVoice(finalize: false)] : []
+        if takingOver {
             voice = .off
+            voiceReady = false
+            sendAfterFinish = false
             text = Self.takeOver(display, fieldHad: fieldText ?? display, edited: value)
             volatile = ""
             return effects
@@ -213,22 +232,30 @@ public struct PromptDraft: Equatable, Sendable {
     /// Return. While the microphone is on it goes off first and the prompt goes out once the last words are in
     /// (`voiceFinished`). Never more than one send for one Return; nothing while an upload is still running.
     public mutating func submit() -> [PromptEffect] {
-        guard !sending, voice != .finishing else { return [] }
+        guard !sending else { return [] }
         if uploading { notice = Self.waitsForUploads; return [] }
+        if voice == .finishing { sendAfterFinish = true; return [] }
         // Before the first words show, the microphone may already have heard some: finalize, then send what came.
         if voice.isActive {
             voice = .finishing
+            sendAfterFinish = true
             return [.stopVoice(finalize: true)]
         }
         return send()
     }
 
-    /// The transcriber has finalized after Return: now the prompt goes out.
+    /// The transcriber has finalized; send only if Return explicitly requested it.
     public mutating func voiceFinished() -> [PromptEffect] {
         guard voice == .finishing else { return [] }
         keepVolatile()
-        voice = .off
-        return send()
+        voice = noSpeech && !heardSpeech ? .unavailable(.noSpeech) : .off
+        voiceReady = voice == .off && !sendAfterFinish
+        noSpeech = false
+        if sendAfterFinish {
+            sendAfterFinish = false
+            return send()
+        }
+        return []
     }
 
     private mutating func send() -> [PromptEffect] {

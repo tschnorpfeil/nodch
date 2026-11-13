@@ -12,6 +12,7 @@ enum VoiceEvent: Equatable {
     case level(Float)
     /// After `stop(finalize: true)`: the last words are in.
     case finished
+    case silence(noSpeech: Bool)
 }
 
 /// Where the quick prompt's voice comes from. Events arrive on the main actor, only for the latest `start`.
@@ -43,6 +44,7 @@ final class MicrophoneVoice: VoiceSource {
     private var reading: Task<Void, Never>?
     private var meter: LevelMeter?
     private var meterTimer: Timer?
+    private var activity: VoiceActivity?
     /// Speech models on their way, by locale: one request each, also when the language changes mid-download.
     private var downloading: Set<String> = []
     /// How long Return waits for the last words before sending what it has.
@@ -121,6 +123,7 @@ final class MicrophoneVoice: VoiceSource {
         meterTimer?.invalidate()
         meterTimer = nil
         meter = nil
+        activity = nil
         guard let engine else { return }
         self.engine = nil
         // Stopping the hardware takes a moment too; the card closes without waiting for it.
@@ -190,12 +193,15 @@ final class MicrophoneVoice: VoiceSource {
         feed.attach(run)
         self.run = run
         self.meter = meter
+        activity = VoiceActivity(started: ProcessInfo.processInfo.systemUptime)
         delivering = run
         reading = Task { @MainActor [weak self] in
             do {
                 for try await result in run.transcriber.results {
                     guard let self, delivering === run else { return }
-                    events?(.heard(String(result.text.characters), final: result.isFinal))
+                    let words = String(result.text.characters)
+                    activity?.words(words, at: ProcessInfo.processInfo.systemUptime)
+                    events?(.heard(words, final: result.isFinal))
                 }
             } catch {}
             // Ended while still listening (an error, or the analyzer gave up): the microphone goes off and the card
@@ -206,7 +212,11 @@ final class MicrophoneVoice: VoiceSource {
         meterTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 15, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
                 guard let self, let meter = self.meter else { return }
-                self.events?(.level(meter.take()))
+                let level = meter.take()
+                self.events?(.level(level))
+                if let noSpeech = self.activity?.sample(level: level, at: ProcessInfo.processInfo.systemUptime) {
+                    self.events?(.silence(noSpeech: noSpeech))
+                }
             }
         }
         events?(.started(language: locale.identifier(.bcp47)))
