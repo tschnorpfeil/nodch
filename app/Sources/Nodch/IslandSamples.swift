@@ -57,6 +57,44 @@ enum IslandSamples {
             + "Please read the attached one-pager before the call; it covers the cost comparison and the",
         bodyCut: true)
 
+    // Quick prompts, built through the same steps the app takes.
+
+    static var failedSend: PromptDraft {
+        var draft = PromptDraft(text: "Summarise my unread mail from today")
+        _ = draft.submit()
+        draft.sendFailed("Nod didn’t accept the message: the server answered 503.")
+        return draft
+    }
+
+    /// Opened with the shortcut: some words final, the latest still being recognized.
+    static var listening: PromptDraft {
+        var draft = PromptDraft()
+        _ = draft.open(.hotkey)
+        draft.voiceStarted()
+        draft.heard("Please summarize my unread email", final: true)
+        draft.heard("from today and flag anything urgent", final: false)
+        return draft
+    }
+
+    static var voiceDenied: PromptDraft {
+        var draft = PromptDraft()
+        _ = draft.open(.hotkey)
+        draft.voiceUnavailable(.microphoneDenied)
+        return draft
+    }
+
+    /// Three dropped files: one uploaded, one still uploading, one refused.
+    static var attachments: PromptDraft {
+        var draft = PromptDraft(text: "What do these say about Q4?")
+        let folder = URL(fileURLWithPath: "/Users/demo/Documents", isDirectory: true)
+        _ = draft.drop(["Q4 report.pdf", "receipts-november.zip", "Board deck final v7 (copy).key"].map {
+            DroppedFile(url: folder.appendingPathComponent($0), isDirectory: false)
+        })
+        draft.uploaded(1, as: NodAttachment(id: "demo-upload-1", name: "Q4 report.pdf", mimeType: "application/pdf", size: 482_133))
+        draft.uploadFailed(3, reason: "Nod refused it: larger than 25 MB.")
+        return draft
+    }
+
     static let failed = IslandState.failed(message: "The browser session expired while filling in the form. Sign in again in Nod, then retry from there.")
     static let offline = IslandState.offline(reason: "Nod isn’t running, or it doesn’t answer on localhost.")
     static let done = IslandState.done(summary: "Expense report sent to finance")

@@ -38,7 +38,8 @@ final class IslandHostingView<Content: View>: NSHostingView<Content> {
     override var mouseDownCanMoveWindow: Bool { false }
 }
 
-/// Draws the black silhouette and reveals the two contents inside it: the compact wing, and the open card.
+/// Draws the black silhouette and reveals the two contents inside it: the compact wing, and the open card. Files
+/// dropped anywhere on the shape, closed or open, go to the quick prompt.
 final class IslandView: NSView {
     let compact: IslandHostingView<IslandCompactView>
     let panel: IslandHostingView<IslandPanelView>
@@ -50,6 +51,9 @@ final class IslandView: NSView {
     private var origin = CGPoint.zero
     var onPanelShown: (() -> Void)?
     var onHover: ((Bool) -> Void)?
+    /// A file drag is over the shape (true) or left it.
+    var onDragOver: ((Bool) -> Void)?
+    var onDrop: (([DroppedFile]) -> Void)?
 
     init(model: IslandModel, onHeight: @escaping (CGFloat) -> Void) {
         self.model = model
@@ -66,9 +70,30 @@ final class IslandView: NSView {
         clip.addSubview(compact)
         clip.addSubview(panel)
         addSubview(clip)
+        registerForDraggedTypes(DropReader.types)
     }
 
     required init?(coder: NSCoder) { nil }
+
+    // MARK: Drops
+    // Adapted from Pippa: app/Sources/Pippa/App/DropHostingView.swift
+
+    private func dragTarget(_ sender: any NSDraggingInfo) -> NSDragOperation {
+        let inside = DropReader.carriesFiles(sender.draggingPasteboard) && shapeContains(convert(sender.draggingLocation, from: nil))
+        onDragOver?(inside)
+        return inside ? .copy : []
+    }
+
+    override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation { dragTarget(sender) }
+    override func draggingUpdated(_ sender: any NSDraggingInfo) -> NSDragOperation { dragTarget(sender) }
+    override func draggingExited(_ sender: (any NSDraggingInfo)?) { onDragOver?(false) }
+    override func prepareForDragOperation(_ sender: any NSDraggingInfo) -> Bool { !dragTarget(sender).isEmpty }
+
+    override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
+        guard prepareForDragOperation(sender) else { return false }
+        DropReader.read(sender.draggingPasteboard) { [weak self] files in self?.onDrop?(files) }
+        return true
+    }
 
     override var isOpaque: Bool { false }
 
@@ -160,6 +185,7 @@ final class IslandPresenter: NSObject {
     private var fadeToken = 0
     private var monitors: [Any] = []
     private var observers: [NSObjectProtocol] = []
+    private var pressWatch: Timer?
     var onClosed: (() -> Void)?
     /// The close has finished: the island may move to another display now.
     var onIdle: (() -> Void)?
@@ -408,10 +434,11 @@ final class IslandPresenter: NSObject {
             return escape ? nil : event
         }
         // Clicks in other apps are outside.
-        let global = NSEvent.addGlobalMonitorForEvents(matching: clicks) { [weak self] _ in
+        let global = NSEvent.addGlobalMonitorForEvents(matching: clicks) { [weak self] event in
+            let type = event.type
             MainActor.assumeIsolated {
                 guard let self, self.closesOnOutsideClick() else { return }
-                self.close()
+                if type == .leftMouseDown { self.pressedOutside() } else { self.close() }
             }
         }
         monitors = [local, global].compactMap { $0 }
@@ -424,7 +451,28 @@ final class IslandPresenter: NSObject {
         })
     }
 
+    // Adapted from Pippa: app/Sources/Pippa/App/IslandPresenter.swift (pressedOutside)
+    /// A press in another app may start a drag onto the card ("drop a file here"), so the card waits for the button
+    /// to come up: a plain click closes it then, and so does a drag that ends anywhere else. A drag that ends on the
+    /// card leaves it open with the files.
+    private func pressedOutside() {
+        let drags = NSPasteboard(name: .drag).changeCount
+        pressWatch?.invalidate()
+        pressWatch = Timer.scheduledTimer(withTimeInterval: 0.03, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, NSEvent.pressedMouseButtons & 1 == 0 else { return }
+                self.pressWatch?.invalidate()
+                self.pressWatch = nil
+                let dragged = NSPasteboard(name: .drag).changeCount != drags
+                let onIsland = self.view.shapeContains(self.panel.convertPoint(fromScreen: NSEvent.mouseLocation))
+                if !(dragged && onIsland) { self.close() }
+            }
+        }
+    }
+
     private func removeMonitors() {
+        pressWatch?.invalidate()
+        pressWatch = nil
         monitors.forEach(NSEvent.removeMonitor)
         monitors.removeAll()
         observers.forEach(NSWorkspace.shared.notificationCenter.removeObserver)

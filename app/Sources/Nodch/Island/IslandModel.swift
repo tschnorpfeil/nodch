@@ -3,8 +3,8 @@ import NodchCore
 import Observation
 
 /// What the island's views read besides `IslandStore.state`: whether the card is open and what it shows, the quick
-/// prompt, and actions in flight. Every call to Nod goes through `store.actions`, once per explicit user action, and is
-/// never retried: a failure shows inline and waits for the person.
+/// prompt (`PromptDraft`, with its voice and attachments), and actions in flight. Every call to Nod goes through
+/// `store.actions`, once per explicit user action, and is never retried: a failure shows inline and waits for the person.
 @MainActor @Observable final class IslandModel {
     let store: IslandStore
     /// The pointer is on the island (it reveals the resting notch's affordance and the offline wing's words).
@@ -14,9 +14,13 @@ import Observation
     var isOpen = false
     /// The open card shows the quick prompt instead of the state.
     var showsPrompt = false
-    var prompt = ""
-    var promptError: String?
-    private(set) var sending = false
+    /// The quick prompt: text, voice, attachments. Changed only through the methods below, which carry out what it
+    /// decides (`PromptEffect`).
+    var draft = PromptDraft()
+    /// The microphone's level while listening, 0…1.
+    var voiceLevel: Float = 0
+    /// Files dragged toward or over the island.
+    var dropZone = IslandDropZone.none
     /// An answer on its way: true for Approve, false for Decline.
     private(set) var answering: Bool?
     private(set) var stopping = false
@@ -49,6 +53,8 @@ import Observation
         var wing = IslandWing()
         var line = ""
         var since: Date?
+        /// Files are dragged toward (or over) the closed island.
+        var drop = IslandDropZone.none
     }
 
     @ObservationIgnored var onCompactClick: () -> Void = {}
@@ -56,13 +62,24 @@ import Observation
     /// The prompt went out: the card closes and the keyboard goes back.
     @ObservationIgnored var onSent: () -> Void = {}
     @ObservationIgnored var log: (String) -> Void = { print("nodch: \($0)") }
+    /// The microphone; nil (snapshots) reads as voice not available.
+    @ObservationIgnored var voice: VoiceSource?
 
     init(store: IslandStore) { self.store = store }
 
     var state: IslandState { store.state }
     var tone: IslandTone { IslandPresentation.tone(store.state, doneAge: doneExpired ? .infinity : 0) }
     var line: String { IslandPresentation.line(store.state) }
-    var wing: IslandWing? { IslandPresentation.wing(store.state, tone: tone, hovering: hovering && !isOpen) }
+    var wing: IslandWing? {
+        if dropZone != .none, !isOpen { return IslandWing() }
+        return IslandPresentation.wing(store.state, tone: tone, hovering: hovering && !isOpen)
+    }
+    /// The wing's words: while files are dragged toward the closed island, where they go.
+    var wingLine: String {
+        // The same words near and over: a wing that changed width under the pointer could flicker between the two.
+        dropZone != .none && !isOpen ? "Drop files for Nod" : line
+    }
+    var sending: Bool { draft.sending }
     var approval: (PendingApproval, more: Int)? {
         if case .needsYou(let approval, let more) = store.state { (approval, more) } else { nil }
     }
@@ -95,22 +112,67 @@ import Observation
         }
     }
 
-    /// Return in the prompt: sends once. On success the card closes; on failure the text stays with the error under it.
-    func submitPrompt() {
-        let text = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !sending, !text.isEmpty else { return }
-        guard let actions = store.actions else { promptError = Self.notConnected; return }
-        sending = true
-        promptError = nil
+    // MARK: Quick prompt
+
+    /// Carries out what the draft decided: the microphone, uploads and the one send.
+    func perform(_ effects: [PromptEffect]) {
+        for effect in effects {
+            switch effect {
+            case .startVoice: startVoice()
+            case .stopVoice(let finalize):
+                voiceLevel = 0
+                voice?.stop(finalize: finalize)
+            case .upload(let id, let file): upload(id, file)
+            case .send(let prompt, let attachments): send(prompt, attachments)
+            }
+        }
+    }
+
+    /// The field changed under the person's hands (not by the transcriber).
+    func typed(_ value: String) { perform(draft.typed(value)) }
+    func toggleVoice() { perform(draft.toggleVoice()) }
+    /// Return: sends once, after the microphone is off. On success the card closes; on failure the text stays with
+    /// the error under it.
+    func submitPrompt() { perform(draft.submit()) }
+    func dropped(_ files: [DroppedFile]) { perform(draft.drop(files)) }
+    func removeAttachment(_ id: Int) { draft.remove(id) }
+
+    private func startVoice() {
+        guard let voice else { draft.voiceUnavailable(.speechUnavailable); return }
+        voice.start { [weak self] event in self?.heard(event) }
+    }
+
+    private func heard(_ event: VoiceEvent) {
+        switch event {
+        case .started: draft.voiceStarted()
+        case .unavailable(let hint):
+            voiceLevel = 0
+            draft.voiceUnavailable(hint)
+        case .heard(let words, let final): draft.heard(words, final: final)
+        case .level(let level): voiceLevel = draft.voice == .listening ? level : 0
+        case .finished:
+            voiceLevel = 0
+            perform(draft.voiceFinished())
+        }
+    }
+
+    private func upload(_ id: Int, _ file: URL) {
+        guard let actions = store.actions else { draft.uploadFailed(id, reason: Self.notConnected); return }
+        Task {
+            do { draft.uploaded(id, as: try await actions.upload(file: file)) } catch {
+                draft.uploadFailed(id, reason: Self.describe(error))
+            }
+        }
+    }
+
+    private func send(_ prompt: String, _ attachments: [NodAttachment]) {
+        guard let actions = store.actions else { draft.sendFailed(Self.notConnected); return }
         Task {
             do {
-                try await actions.send(prompt: text, attachments: [])
-                prompt = ""
-                sending = false
-                onSent()
+                try await actions.send(prompt: prompt, attachments: attachments)
+                if draft.sent() { onSent() }
             } catch {
-                promptError = Self.describe(error)
-                sending = false
+                draft.sendFailed(Self.describe(error))
             }
         }
     }

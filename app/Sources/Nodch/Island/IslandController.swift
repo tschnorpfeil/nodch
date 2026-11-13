@@ -4,8 +4,9 @@ import NodchCore
 import Observation
 
 /// Follows `IslandStore.state` and drives the presenter: the wing for each state, the card that opens by itself for an
-/// approval (without the keyboard), "done" that goes back to rest, the quick prompt on the shortcut, and the display
-/// the island lives on.
+/// approval (without the keyboard), "done" that goes back to rest, the quick prompt on the shortcut (listening) or a
+/// click, files dragged onto the island, and the display the island lives on. The microphone is on only while the
+/// card shows the prompt: every way of closing it turns it off.
 @MainActor
 final class IslandController {
     let model: IslandModel
@@ -17,9 +18,14 @@ final class IslandController {
     private var doneTimer: Task<Void, Never>?
     private var ticker: Timer?
     private var observers: [NSObjectProtocol] = []
+    private var dragMonitor: Any?
+    /// The drag pasteboard when the button went down: a file drag changes it.
+    private var dragStart = 0
+    private var dragEnd: Task<Void, Never>?
 
-    init(store: IslandStore) {
+    init(store: IslandStore, voice: VoiceSource? = MicrophoneVoice()) {
         model = IslandModel(store: store)
+        model.voice = voice
         presenter = IslandPresenter(model: model)
         lastState = store.state
     }
@@ -49,7 +55,10 @@ final class IslandController {
             guard let self else { return }
             openCause = nil
             model.isOpen = false
+            model.perform(model.draft.closed())
         }
+        presenter.view.onDragOver = { [weak self] over in self?.dragOver(over) }
+        presenter.view.onDrop = { [weak self] files in self?.dropped(files) }
         presenter.onIdle = { [weak self] in self?.refresh() }
 
         let center = NotificationCenter.default
@@ -65,6 +74,11 @@ final class IslandController {
             MainActor.assumeIsolated { self?.refresh() }
         })
 
+        // Mouse events of other apps need no permission; the drag pasteboard tells a file drag from any other.
+        dragMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .leftMouseDragged, .leftMouseUp]) { [weak self] event in
+            let type = event.type
+            MainActor.assumeIsolated { self?.followDrag(type) }
+        }
         HotkeyCenter.shared.onPress = { [weak self] in self?.hotkeyPressed() }
         model.hotkey = HotkeyCenter.shared.apply()?.display
         observe()
@@ -140,14 +154,15 @@ final class IslandController {
     static func compact(_ model: IslandModel, _ placement: IslandPlacement, now: Date = Date()) -> (leading: CGFloat, trailing: CGFloat)? {
         guard let wing = model.wing else { return nil }
         let elapsed = model.activity.map { now.timeIntervalSince($0.since) }
-        return IslandMetrics.wing(wing, line: model.line, elapsed: elapsed, hint: model.hotkey ?? "", notch: placement.isNotch)
+        return IslandMetrics.wing(wing, line: model.wingLine, elapsed: elapsed, hint: model.hotkey ?? "", notch: placement.isNotch)
     }
 
     /// The content the wing shows and its sides after the geometry clamped them. A wing going back to rest keeps its
     /// last content, so its words fade with the shape instead of vanishing first.
     static func apply(_ compact: (leading: CGFloat, trailing: CGFloat)?, to model: IslandModel, placement: IslandPlacement) {
         guard let compact, let wing = model.wing else { return }
-        let shown = IslandModel.Shown(tone: model.tone, wing: wing, line: model.line, since: model.activity?.since)
+        let drop = model.isOpen ? IslandDropZone.none : model.dropZone
+        let shown = IslandModel.Shown(tone: model.tone, wing: wing, line: model.wingLine, since: model.activity?.since, drop: drop)
         if shown != model.shown { model.shown = shown }
         let rect = IslandGeometry.compact(placement, leading: compact.leading, trailing: compact.trailing)
         var layout = model.layout
@@ -183,11 +198,12 @@ final class IslandController {
         }
         guard presenter.placement != nil else { return }
         switch cause {
-        case .hotkey:
+        case .hotkey, .drop:
             model.showsPrompt = true
-            model.promptError = nil
+            model.perform(model.draft.open(cause == .hotkey ? .hotkey : .drop))
         case .click:
             model.showsPrompt = model.tone == .rest
+            if model.showsPrompt { model.perform(model.draft.open(.click)) }
         case .approval:
             // The person may be typing in the prompt they opened: the approval waits in the wing for them.
             if model.isOpen, model.showsPrompt { return }
@@ -213,7 +229,7 @@ final class IslandController {
         if front?.processIdentifier != ProcessInfo.processInfo.processIdentifier { previousApp = front }
         if model.isOpen {
             model.showsPrompt = true
-            model.promptError = nil
+            model.perform(model.draft.open(.hotkey))
             openCause = .hotkey
             presenter.open(key: true)
             model.focusToken += 1
@@ -225,8 +241,7 @@ final class IslandController {
     /// Escape: the prompt is discarded and the keyboard goes back; any other card only folds away.
     private func escape() {
         if model.showsPrompt {
-            model.prompt = ""
-            model.promptError = nil
+            model.perform(model.draft.escape())
             closePrompt()
         } else {
             presenter.close()
@@ -237,5 +252,67 @@ final class IslandController {
         presenter.close()
         if let app = previousApp, !app.isTerminated { app.activate() }
         previousApp = nil
+    }
+
+    // MARK: Drops
+
+    /// A file drag in another app: near the top of the island's display the closed island shows where to drop.
+    private func followDrag(_ type: NSEvent.EventType) {
+        let board = NSPasteboard(name: .drag)
+        switch type {
+        case .leftMouseDown:
+            dragStart = board.changeCount
+        case .leftMouseUp where model.dropZone != .none:
+            // The drop reaches the island after this event: a zone that got nothing goes away once it would have.
+            dragEnd?.cancel()
+            dragEnd = Task { [weak self] in
+                try? await Task.sleep(for: .milliseconds(600))
+                guard !Task.isCancelled, let self, NSEvent.pressedMouseButtons & 1 == 0 else { return }
+                setDropZone(.none)
+            }
+        case .leftMouseDragged:
+            guard board.changeCount != dragStart, DropReader.carriesFiles(board) else { return }
+            if model.dropZone == .none, !model.isOpen, presenter.isIdle, let placement = Self.placement(), placement != presenter.placement {
+                presenter.place(placement, compact: Self.compact(model, placement))
+            }
+            guard let placement = presenter.placement, model.dropZone != .over else { return }
+            let near = IslandDropZone.isNear(pointer: NSEvent.mouseLocation, placement: placement, screens: NSScreen.screens.map(\.frame))
+            setDropZone(near ? .near : .none)
+        default:
+            break
+        }
+    }
+
+    private func dragOver(_ over: Bool) {
+        if over { setDropZone(.over) } else if model.dropZone == .over { setDropZone(.near) }
+    }
+
+    private func setDropZone(_ zone: IslandDropZone) {
+        guard model.dropZone != zone else { return }
+        model.dropZone = zone
+        refresh()
+    }
+
+    /// Files dropped on the island: the prompt opens with the keyboard (and the microphone as it was), one chip per
+    /// file, each uploading at once. Nothing is sent until Return.
+    private func dropped(_ files: [DroppedFile]) {
+        dragEnd?.cancel()
+        setDropZone(.none)
+        guard !files.isEmpty else { return }
+        let front = NSWorkspace.shared.frontmostApplication
+        if front?.processIdentifier != ProcessInfo.processInfo.processIdentifier { previousApp = front }
+        if model.isOpen {
+            if !model.showsPrompt {
+                model.showsPrompt = true
+                model.perform(model.draft.open(.drop))
+            }
+            openCause = .drop
+            presenter.open(key: true)
+            model.focusToken += 1
+        } else {
+            open(.drop)
+        }
+        model.dropped(files)
+        refresh()
     }
 }

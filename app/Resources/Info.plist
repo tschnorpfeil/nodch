@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleExecutable</key>
+	<string>Nodch</string>
+	<key>CFBundleIdentifier</key>
+	<string>dev.nodch.Nodch</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>nodch</string>
+	<key>CFBundleDisplayName</key>
+	<string>nodch</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>0.1.0</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>26.0</string>
+	<key>LSUIElement</key>
+	<true/>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>nodch listens while the quick prompt is open, so you can say what you want Nod to do. Speech is turned into text on this Mac.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>nodch turns what you say in the quick prompt into text, on this Mac.</string>
+	<key>NSHumanReadableCopyright</key>
+	<string>Unofficial notch mode for Nod. Not made or endorsed by n8n GmbH.</string>
+</dict>
+</plist>
