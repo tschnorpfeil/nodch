@@ -273,6 +273,8 @@ import Observation
             if isOpen { focusToken += 1 }
         } else if !keepingText {
             onSent()
+        } else if isOpen, showsPrompt {
+            focusToken += 1
         }
     }
 
@@ -281,7 +283,7 @@ import Observation
         let newQuestion = asking.map { $0.id != questionID } ?? false
         let prefix = newQuestion ? (questionID == nil ? "Couldn’t send the previous message: " : "Couldn’t send the previous answer: ") : ""
         draft.sendFailed(prefix + Self.describe(error), token: token)
-        if isOpen, newQuestion { focusToken += 1 }
+        if isOpen, showsPrompt { focusToken += 1 }
     }
 
     func openNod(path: String = "/") {
