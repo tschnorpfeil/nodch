@@ -1,0 +1,241 @@
+// Adapted from Pippa: app/Sources/Pippa/App/Island.swift
+import AppKit
+import NodchCore
+import Observation
+
+/// Follows `IslandStore.state` and drives the presenter: the wing for each state, the card that opens by itself for an
+/// approval (without the keyboard), "done" that goes back to rest, the quick prompt on the shortcut, and the display
+/// the island lives on.
+@MainActor
+final class IslandController {
+    let model: IslandModel
+    let presenter: IslandPresenter
+    private var openCause: IslandPresentation.OpenCause?
+    private var lastState: IslandState
+    /// The app in front when the shortcut was pressed: it gets the keyboard back when the prompt closes.
+    private var previousApp: NSRunningApplication?
+    private var doneTimer: Task<Void, Never>?
+    private var ticker: Timer?
+    private var observers: [NSObjectProtocol] = []
+
+    init(store: IslandStore) {
+        model = IslandModel(store: store)
+        presenter = IslandPresenter(model: model)
+        lastState = store.state
+    }
+
+    func start() {
+        model.onCompactClick = { [weak self] in self?.compactClicked() }
+        model.onCollapse = { [weak self] in self?.presenter.close() }
+        model.onSent = { [weak self] in self?.closePrompt() }
+        presenter.view.onHover = { [weak self] inside in
+            guard let self, model.hovering != inside else { return }
+            model.hovering = inside
+            refresh()
+        }
+        presenter.view.onPanelShown = { [weak self] in
+            guard let self else { return }
+            // Reopening keeps the SwiftUI card alive, so its onAppear does not run: restart the click guard here.
+            if model.approval != nil, !model.showsPrompt { model.approvalShownAt = Date() }
+            guard model.showsPrompt else { return }
+            model.focusToken += 1
+        }
+        presenter.onEscape = { [weak self] in self?.escape() }
+        presenter.closesOnOutsideClick = { [weak self] in
+            guard let cause = self?.openCause else { return true }
+            return IslandPresentation.closesOnOutsideClick(cause)
+        }
+        presenter.onClosed = { [weak self] in
+            guard let self else { return }
+            openCause = nil
+            model.isOpen = false
+        }
+        presenter.onIdle = { [weak self] in self?.refresh() }
+
+        let center = NotificationCenter.default
+        observers.append(center.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                // A display came or went: start again from rest on whichever display has the island now.
+                self?.presenter.close(animated: false)
+                self?.refresh()
+            }
+        })
+        observers.append(NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.activeSpaceDidChangeNotification,
+                                                                           object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.refresh() }
+        })
+
+        HotkeyCenter.shared.onPress = { [weak self] in self?.hotkeyPressed() }
+        model.hotkey = HotkeyCenter.shared.apply()?.display
+        observe()
+        stateChanged()
+    }
+
+    private func observe() {
+        withObservationTracking { _ = model.store.state } onChange: { [weak self] in
+            Task { @MainActor in
+                self?.stateChanged()
+                self?.observe()
+            }
+        }
+    }
+
+    private func stateChanged() {
+        let old = lastState, new = model.store.state
+        lastState = new
+        if case .done = new {
+            if old != new || doneTimer == nil { startDoneTimer() }
+        } else {
+            doneTimer?.cancel()
+            doneTimer = nil
+            model.doneExpired = false
+        }
+        let oldID: String? = if case .needsYou(let a, _) = old { a.id } else { nil }
+        if oldID != model.approval?.0.id { model.actionError = nil; model.approvalShownAt = Date() }
+        if case .working = new {} else if case .working = old { model.actionError = nil }
+        switch IslandPresentation.reaction(from: old, to: new, open: openCause) {
+        case .reveal: open(.approval)
+        case .conceal: presenter.close()
+        case .none: break
+        }
+        refresh()
+    }
+
+    /// "Done" shows for a moment, then the island reads it as rest.
+    private func startDoneTimer() {
+        doneTimer?.cancel()
+        model.doneExpired = false
+        doneTimer = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(IslandPresentation.doneDuration))
+            guard !Task.isCancelled, let self else { return }
+            model.doneExpired = true
+            refresh()
+        }
+    }
+
+    func refresh() {
+        // A card on a state with nothing to show folds away (done went back to rest).
+        if model.isOpen, !model.showsPrompt, model.tone == .rest { presenter.close() }
+        if presenter.isIdle, !model.isOpen, let placement = Self.placement(), placement != presenter.placement {
+            presenter.place(placement, compact: Self.compact(model, placement))
+        }
+        guard let placement = presenter.placement else { return }
+        let compact = Self.compact(model, placement)
+        Self.apply(compact, to: model, placement: placement)
+        presenter.setCompact(compact)
+        // The elapsed time grows a digit now and then: measure again every second while Nod works.
+        if model.tone == .working {
+            if ticker == nil {
+                ticker = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+                    MainActor.assumeIsolated { self?.refresh() }
+                }
+            }
+        } else {
+            ticker?.invalidate()
+            ticker = nil
+        }
+    }
+
+    /// The wing's two sides for the current state, or nil for rest.
+    static func compact(_ model: IslandModel, _ placement: IslandPlacement, now: Date = Date()) -> (leading: CGFloat, trailing: CGFloat)? {
+        guard let wing = model.wing else { return nil }
+        let elapsed = model.activity.map { now.timeIntervalSince($0.since) }
+        return IslandMetrics.wing(wing, line: model.line, elapsed: elapsed, hint: model.hotkey ?? "", notch: placement.isNotch)
+    }
+
+    /// The content the wing shows and its sides after the geometry clamped them. A wing going back to rest keeps its
+    /// last content, so its words fade with the shape instead of vanishing first.
+    static func apply(_ compact: (leading: CGFloat, trailing: CGFloat)?, to model: IslandModel, placement: IslandPlacement) {
+        guard let compact, let wing = model.wing else { return }
+        let shown = IslandModel.Shown(tone: model.tone, wing: wing, line: model.line, since: model.activity?.since)
+        if shown != model.shown { model.shown = shown }
+        let rect = IslandGeometry.compact(placement, leading: compact.leading, trailing: compact.trailing)
+        var layout = model.layout
+        switch placement {
+        case .notch(let housing, _):
+            layout.leading = max(0, housing.minX - rect.minX)
+            layout.trailing = max(0, rect.maxX - housing.maxX)
+        case .menuBar:
+            layout.trailing = compact.trailing
+            layout.leading = max(0, rect.width - compact.trailing)
+        }
+        if layout != model.layout { model.layout = layout }
+    }
+
+    /// At the notch when a display has one; otherwise below the menu bar of the display in use.
+    static func placement() -> IslandPlacement? {
+        let screens = NSScreen.screens
+        for screen in screens {
+            if let housing = IslandGeometry.housing(screen: screen.frame, leftArea: screen.auxiliaryTopLeftArea,
+                                                    rightArea: screen.auxiliaryTopRightArea, topInset: screen.safeAreaInsets.top) {
+                return .notch(housing: housing, screen: screen.frame)
+            }
+        }
+        guard let screen = NSScreen.main ?? screens.first else { return nil }
+        return IslandGeometry.placement(screen: screen.frame, visible: screen.visibleFrame, leftArea: nil, rightArea: nil, topInset: 0)
+    }
+
+    // MARK: Actions
+
+    private func open(_ cause: IslandPresentation.OpenCause) {
+        if !model.isOpen, presenter.isIdle, let placement = Self.placement(), placement != presenter.placement {
+            presenter.place(placement, compact: Self.compact(model, placement))
+        }
+        guard presenter.placement != nil else { return }
+        switch cause {
+        case .hotkey:
+            model.showsPrompt = true
+            model.promptError = nil
+        case .click:
+            model.showsPrompt = model.tone == .rest
+        case .approval:
+            // The person may be typing in the prompt they opened: the approval waits in the wing for them.
+            if model.isOpen, model.showsPrompt { return }
+            model.showsPrompt = false
+        }
+        openCause = cause
+        model.isOpen = true
+        presenter.open(key: IslandPresentation.takesKey(cause))
+        if IslandPresentation.takesKey(cause), model.showsPrompt { model.focusToken += 1 }
+        refresh()
+    }
+
+    private func compactClicked() {
+        if model.isOpen { presenter.close(); return }
+        // Right after a turn the click goes to Nod, where the result is.
+        if model.tone == .done { model.openNod(); return }
+        open(.click)
+    }
+
+    private func hotkeyPressed() {
+        if model.isOpen, model.showsPrompt, presenter.panel.isKeyWindow { escape(); return }
+        let front = NSWorkspace.shared.frontmostApplication
+        if front?.processIdentifier != ProcessInfo.processInfo.processIdentifier { previousApp = front }
+        if model.isOpen {
+            model.showsPrompt = true
+            model.promptError = nil
+            openCause = .hotkey
+            presenter.open(key: true)
+            model.focusToken += 1
+        } else {
+            open(.hotkey)
+        }
+    }
+
+    /// Escape: the prompt is discarded and the keyboard goes back; any other card only folds away.
+    private func escape() {
+        if model.showsPrompt {
+            model.prompt = ""
+            model.promptError = nil
+            closePrompt()
+        } else {
+            presenter.close()
+        }
+    }
+
+    private func closePrompt() {
+        presenter.close()
+        if let app = previousApp, !app.isTerminated { app.activate() }
+        previousApp = nil
+    }
+}

@@ -23,6 +23,24 @@ swift build --package-path app
 swift run --package-path app NodchChecks
 ```
 
+## Run
+
+nodch talks to a Nod you run from source or self-host (the Nod desktop app keeps its server private).
+
+```sh
+NOD_URL=http://127.0.0.1:4310 NOD_DATA_ROOT=/path/to/nod/.local swift run --package-path app Nodch
+```
+
+`NOD_AUTH_TOKEN` replaces the access key when Nod runs with one. Without a Nod at hand:
+
+```sh
+swift run --package-path app Nodch --demo              # cycles through every state
+swift run --package-path app Nodch --snapshot <dir>    # renders every state to PNG
+scripts/contract.sh                                    # real Nod in Docker with a free stub model
+```
+
+See [docs/contract.md](docs/contract.md) for the contract test.
+
 ## License
 
 Apache-2.0, see [LICENSE](LICENSE) and [NOTICE](NOTICE).
