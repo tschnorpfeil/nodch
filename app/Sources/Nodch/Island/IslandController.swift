@@ -243,10 +243,12 @@ final class IslandController {
     }
 
     private func hotkeyPressed() {
-        if model.isOpen, model.showsPrompt, presenter.panel.isKeyWindow { escape(); return }
+        let action = IslandPresentation.hotkey(open: model.isOpen, prompt: model.showsPrompt, key: presenter.panel.isKeyWindow)
+        // Closing turns the microphone off (`PromptDraft.closed`) and keeps the draft.
+        if action == .hide { closePrompt(); return }
         let front = NSWorkspace.shared.frontmostApplication
         if front?.processIdentifier != ProcessInfo.processInfo.processIdentifier { previousApp = front }
-        if model.isOpen {
+        if action == .prompt {
             model.showsPrompt = true
             model.perform(model.draft.open(.hotkey))
             openCause = .hotkey

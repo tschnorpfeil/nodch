@@ -6,6 +6,21 @@ extension IslandChecks {
     static func keys() {
         typealias P = IslandPresentation
 
+        // The shortcut on the open prompt hides it; the draft is there on the next open, the microphone off meanwhile.
+        check(P.hotkey(open: true, prompt: true, key: true) == .hide, "keys: the shortcut on the open prompt hides it")
+        check(P.hotkey(open: false, prompt: true, key: false) == .open && P.hotkey(open: true, prompt: true, key: false) == .prompt
+              && P.hotkey(open: true, prompt: false, key: true) == .prompt, "keys: otherwise the shortcut brings the prompt")
+        var kept = PromptDraft()
+        _ = kept.open(.hotkey)
+        kept.voiceStarted()
+        kept.heard("Summarize my mail", final: true)
+        kept.heard("from today", final: false)
+        _ = kept.drop([DroppedFile(url: URL(fileURLWithPath: "/tmp/drop/q4.pdf"), isDirectory: false)])
+        check(kept.closed() == [.stopVoice(finalize: false)] && kept.voice == .off, "keys: hiding turns the microphone off")
+        _ = kept.open(.click)
+        check(kept.display == "Summarize my mail from today" && kept.attachments.count == 1,
+              "keys: the hidden draft keeps its words and files for the next open")
+
         // Escape discards a draft with something in it; the hint must say so.
         var empty = PromptDraft()
         check(!empty.discardsOnEscape && P.promptHints(question: nil, discards: false) == "↩ send  ·  esc close",

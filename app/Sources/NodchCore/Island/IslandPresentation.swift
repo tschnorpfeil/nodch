@@ -158,6 +158,22 @@ public enum IslandPresentation {
     /// is answered or collapsed: a click in another app is not a decision about it.
     public static func closesOnOutsideClick(_ cause: OpenCause) -> Bool { cause != .approval }
 
+    /// What the shortcut does to the card.
+    public enum HotkeyAction: Equatable, Sendable {
+        /// The quick prompt opens.
+        case open
+        /// The open card turns into the prompt and takes the keyboard.
+        case prompt
+        /// The prompt hides and the keyboard goes back. Its words and files stay for next time; only Escape discards.
+        case hide
+    }
+
+    /// `open`: the card is open; `prompt`: it shows the prompt; `key`: it has the keyboard.
+    public static func hotkey(open: Bool, prompt: Bool, key: Bool) -> HotkeyAction {
+        guard open else { return .open }
+        return prompt && key ? .hide : .prompt
+    }
+
     public enum Reaction: Equatable, Sendable { case none, reveal, conceal }
 
     /// What a change of state does to the card. `open`: why the card is open now, nil when it is closed.
