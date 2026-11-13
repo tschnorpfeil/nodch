@@ -23,6 +23,13 @@ enum IslandSamples {
         bodyCut: false,
         question: "I drafted the November expense report. Send it to finance now?")
 
+    /// Many long fields and a long question on top of a long body: the decision row must stay reachable.
+    static let tall = PendingApproval(
+        id: "demo-approval-4", messageID: "demo-message-4", title: "Send this invitation to the whole launch group?", app: "Gmail",
+        fields: (1...12).map { .init(label: "To \($0)", value: "launch-team-member-\($0)@a-long-company-domain.example.com") },
+        body: longPost.body, bodyCut: false,
+        question: String(repeating: "Nod prepared the invitation with every attendee from the planning sheet. ", count: 4) + "Send it now?")
+
     static let longPost = PendingApproval(
         id: "demo-approval-2", messageID: "demo-message-2", title: "Publish this post to the team channel?", app: "Slack",
         fields: [.init(label: "Channel", value: "#launch-coordination"),

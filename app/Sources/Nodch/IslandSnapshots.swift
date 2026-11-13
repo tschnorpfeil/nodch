@@ -26,6 +26,7 @@ enum IslandSnapshots {
         Scene(name: "needs-you", state: .needsYou(IslandSamples.email, more: 0), open: true),
         Scene(name: "needs-you-compact", state: .needsYou(IslandSamples.email, more: 2)),
         Scene(name: "needs-you-long", state: .needsYou(IslandSamples.longPost, more: 2), open: true),
+        Scene(name: "needs-you-tall", state: .needsYou(IslandSamples.tall, more: 0), open: true),
         Scene(name: "needs-you-cut", state: .needsYou(IslandSamples.cutNote, more: 2), open: true),
         Scene(name: "done", state: IslandSamples.done),
         Scene(name: "failed", state: IslandSamples.failed),

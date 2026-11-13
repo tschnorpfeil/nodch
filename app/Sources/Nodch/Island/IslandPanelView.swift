@@ -264,6 +264,54 @@ struct IslandApprovalCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: IslandStyle.gap) {
+            IslandScrollingArea(maxHeight: detailsMax) { details }
+            if approval.bodyCut {
+                HStack(alignment: .firstTextBaseline, spacing: 7) {
+                    Image(systemName: "scissors").font(.system(size: 11, weight: .semibold)).foregroundStyle(IslandStyle.warn)
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Nod shortened this text. The full text is in Nod.")
+                            .font(IslandStyle.small).foregroundStyle(IslandStyle.white(IslandStyle.secondary + 0.1))
+                            .fixedSize(horizontal: false, vertical: true)
+                        Button { model.openNod() } label: {
+                            HStack(spacing: 3) {
+                                Text("Open in Nod")
+                                Image(systemName: "arrow.up.right").font(.system(size: 9, weight: .bold))
+                            }
+                            .font(IslandStyle.small.weight(.semibold)).foregroundStyle(IslandStyle.accent)
+                            .fixedSize()
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Open the full text in Nod")
+                    }
+                }
+            }
+            if let error = model.actionError { IslandErrorLine(text: error) }
+            IslandButtonRow(lead: true) {
+                IslandOpenButton(model: model)
+                decision("Decline", approved: false)
+                decision("Approve", approved: true)
+            }
+            if more > 0 {
+                Text(more == 1 ? "1 more approval waits after this one." : "\(more) more approvals wait after this one.")
+                    .font(IslandStyle.caption).foregroundStyle(IslandStyle.white(IslandStyle.tertiary + 0.1))
+            }
+        }
+        .animation(IslandStyle.fade, value: model.actionError)
+        // The click guard runs from when the card is on screen, also after the prompt hid it or it was folded away.
+        .onAppear { model.approvalShownAt = Date() }
+        .onChange(of: approval.id) { model.approvalShownAt = Date() }
+    }
+
+    /// Title, question, fields and body scroll together in what the display leaves after the button row, so the
+    /// decision stays reachable however long Nod's text is.
+    private var detailsMax: CGFloat {
+        max(120, model.layout.maxContent - 170)
+    }
+
+    private var details: some View {
+        VStack(alignment: .leading, spacing: IslandStyle.gap) {
             VStack(alignment: .leading, spacing: 4) {
                 if !approval.app.isEmpty {
                     Text(approval.app.uppercased())
@@ -300,47 +348,15 @@ struct IslandApprovalCard: View {
                 }
             }
             if let body = approval.body, !body.isEmpty {
-                IslandScrollingText(text: body, maxHeight: bodyMax, well: true)
-            }
-            if approval.bodyCut {
-                HStack(alignment: .firstTextBaseline, spacing: 7) {
-                    Image(systemName: "scissors").font(.system(size: 11, weight: .semibold)).foregroundStyle(IslandStyle.warn)
-                        .accessibilityHidden(true)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Nod shortened this text. The full text is in Nod.")
-                            .font(IslandStyle.small).foregroundStyle(IslandStyle.white(IslandStyle.secondary + 0.1))
-                            .fixedSize(horizontal: false, vertical: true)
-                        Button { model.openNod() } label: {
-                            HStack(spacing: 3) {
-                                Text("Open in Nod")
-                                Image(systemName: "arrow.up.right").font(.system(size: 9, weight: .bold))
-                            }
-                            .font(IslandStyle.small.weight(.semibold)).foregroundStyle(IslandStyle.accent)
-                            .fixedSize()
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Open the full text in Nod")
-                    }
-                }
-            }
-            if let error = model.actionError { IslandErrorLine(text: error) }
-            IslandButtonRow(lead: true) {
-                IslandOpenButton(model: model)
-                decision("Decline", approved: false)
-                decision("Approve", approved: true)
-            }
-            if more > 0 {
-                Text(more == 1 ? "1 more approval waits after this one." : "\(more) more approvals wait after this one.")
-                    .font(IslandStyle.caption).foregroundStyle(IslandStyle.white(IslandStyle.tertiary + 0.1))
+                Text(body)
+                    .font(IslandStyle.body).foregroundStyle(IslandStyle.white(IslandStyle.primary - 0.05))
+                    .lineSpacing(2).textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(10)
+                    .background(RoundedRectangle(cornerRadius: IslandStyle.wellRadius - 2, style: .continuous).fill(IslandStyle.white(0.07)))
             }
         }
-        .animation(IslandStyle.fade, value: model.actionError)
-    }
-
-    /// The body may take what the display leaves after the rest of the card.
-    private var bodyMax: CGFloat {
-        max(80, min(IslandStyle.bodyMaxHeight, model.layout.maxContent - 260))
     }
 
     private func decision(_ title: String, approved: Bool) -> some View {
@@ -354,6 +370,43 @@ struct IslandApprovalCard: View {
         .buttonStyle(IslandButtonStyle(prominent: approved))
         .disabled(busy != nil)
         .accessibilityLabel(approved ? "Approve: \(approval.title)" : "Decline: \(approval.title)")
+    }
+}
+
+/// Content shown in full: up to `maxHeight` as is, taller inside a scroll view that says it scrolls. Never cut.
+struct IslandScrollingArea<Content: View>: View {
+    let maxHeight: CGFloat
+    @ViewBuilder var content: Content
+    /// Without Xcode there is no SwiftUI macro plugin: `@State` is spelled out.
+    private let heightState = State(initialValue: CGFloat(0))
+    private var height: CGFloat { heightState.wrappedValue }
+
+    var body: some View {
+        let overflows = height > maxHeight + 0.5
+        VStack(alignment: .leading, spacing: 5) {
+            ScrollView {
+                content
+                    .padding(.bottom, overflows ? 8 : 0)
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { heightState.wrappedValue = $0 }
+            }
+            .scrollIndicators(overflows ? .visible : .never)
+            .frame(height: max(1, min(height, maxHeight)))
+            .mask {
+                VStack(spacing: 0) {
+                    Color.black
+                    LinearGradient(colors: [.black, overflows ? .black.opacity(0.15) : .black], startPoint: .top, endPoint: .bottom)
+                        .frame(height: 18)
+                }
+            }
+            if overflows {
+                HStack(spacing: 4) {
+                    Image(systemName: "arrow.down").font(.system(size: 9, weight: .bold))
+                    Text("Scroll for the full text")
+                }
+                .font(IslandStyle.caption).foregroundStyle(IslandStyle.white(IslandStyle.tertiary + 0.1))
+                .accessibilityHidden(true)
+            }
+        }
     }
 }
 
