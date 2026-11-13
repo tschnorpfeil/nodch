@@ -20,7 +20,8 @@ enum IslandSamples {
 
         Thanks!
         """,
-        bodyCut: false)
+        bodyCut: false,
+        question: "I drafted the November expense report. Send it to finance now?")
 
     static let longPost = PendingApproval(
         id: "demo-approval-2", messageID: "demo-message-2", title: "Publish this post to the team channel?", app: "Slack",

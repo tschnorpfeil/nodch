@@ -274,6 +274,12 @@ struct IslandApprovalCard: View {
                 Text(approval.title.isEmpty ? "Nod wants to go ahead" : approval.title)
                     .font(IslandStyle.title).foregroundStyle(IslandStyle.white(IslandStyle.primary))
                     .fixedSize(horizontal: false, vertical: true)
+                if let question = approval.question {
+                    Text(question).font(IslandStyle.small)
+                        .foregroundStyle(IslandStyle.white(IslandStyle.secondary))
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             if !approval.fields.isEmpty {
                 Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 12, verticalSpacing: 6) {

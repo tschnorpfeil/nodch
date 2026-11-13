@@ -34,6 +34,8 @@ extension IslandChecks {
         check(P.tone(.done(summary: "Sent"), doneAge: P.doneDuration - 0.1) == .done, "presentation: done holds briefly")
         check(P.tone(.done(summary: "Sent"), doneAge: P.doneDuration) == .rest, "presentation: done returns to rest")
         check(P.doneDuration >= 2 && P.doneDuration <= 5, "presentation: done shows for 2–5 s")
+        check(!P.acceptsAnswer(shownFor: 0.1), "presentation: a fresh approval ignores a stray click")
+        check(P.acceptsAnswer(shownFor: P.answerGuard), "presentation: an approval answers after the guard")
 
         // Wings.
         check(P.wing(.rest, tone: .rest, hovering: false) == nil, "presentation: rest is just the notch")

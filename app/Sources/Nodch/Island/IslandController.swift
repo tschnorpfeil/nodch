@@ -88,7 +88,7 @@ final class IslandController {
             model.doneExpired = false
         }
         let oldID: String? = if case .needsYou(let a, _) = old { a.id } else { nil }
-        if oldID != model.approval?.0.id { model.actionError = nil }
+        if oldID != model.approval?.0.id { model.actionError = nil; model.approvalShownAt = Date() }
         if case .working = new {} else if case .working = old { model.actionError = nil }
         switch IslandPresentation.reaction(from: old, to: new, open: openCause) {
         case .reveal: open(.approval)

@@ -26,14 +26,17 @@ public struct PendingApproval: Equatable, Sendable, Identifiable {
     /// The message that carries the approval; Nod expects it as `replyToMessageId`.
     public var messageID: String
     public var title: String
+    /// The question Nod asks in the message that carries the approval, e.g. "Pause proactive notifications? …".
+    public var question: String?
     public var app: String
     public var fields: [Field]
     public var body: String?
     /// Nod cut the body; the full text is only in Nod's window.
     public var bodyCut: Bool
 
-    public init(id: String, messageID: String, title: String, app: String, fields: [Field], body: String?, bodyCut: Bool) {
-        self.id = id; self.messageID = messageID; self.title = title; self.app = app
+    public init(id: String, messageID: String, title: String, app: String, fields: [Field], body: String?, bodyCut: Bool,
+                question: String? = nil) {
+        self.id = id; self.messageID = messageID; self.title = title; self.question = question; self.app = app
         self.fields = fields; self.body = body; self.bodyCut = bodyCut
     }
 }

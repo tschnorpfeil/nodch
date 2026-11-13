@@ -22,6 +22,8 @@ import Observation
     private(set) var stopping = false
     /// A failed Approve, Decline or Stop, shown in the card until the next try or another approval.
     var actionError: String?
+    /// When the current approval first showed; Approve and Decline wait out `IslandPresentation.answerGuard`.
+    var approvalShownAt = Date.distantPast
     /// Raised to put the keyboard in the prompt field once the card can take it.
     var focusToken = 0
     var layout = Layout()
@@ -70,6 +72,7 @@ import Observation
 
     func answer(approved: Bool) {
         guard answering == nil, let (approval, _) = approval else { return }
+        guard IslandPresentation.acceptsAnswer(shownFor: Date().timeIntervalSince(approvalShownAt)) else { return }
         guard let actions = store.actions else { actionError = Self.notConnected; return }
         answering = approved
         actionError = nil

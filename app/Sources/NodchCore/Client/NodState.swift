@@ -60,7 +60,8 @@ public struct NodStateMapper: Sendable {
             guard message.role == "assistant", let approval = message.approval, approval.state == "pending" else { return nil }
             return PendingApproval(id: approval.id, messageID: message.id, title: approval.title, app: approval.app,
                                    fields: (approval.fields ?? []).map { .init(label: $0.label, value: $0.value) },
-                                   body: approval.body, bodyCut: approval.bodyCut ?? false)
+                                   body: approval.body, bodyCut: approval.bodyCut ?? false,
+                                   question: message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : message.text)
         }
         if let first = approvals.first { doneUntil = nil; return .needsYou(first, more: approvals.count - 1) }
         if let activity = state.activity?.first {

@@ -32,6 +32,11 @@ public struct IslandWing: Equatable, Sendable {
 public enum IslandPresentation {
     /// How long "done" shows before the island goes back to rest.
     public static let doneDuration: TimeInterval = 3.5
+    /// An approval card that just appeared ignores Approve and Decline for this long, so a click meant for whatever
+    /// was under the pointer cannot answer it.
+    public static let answerGuard: TimeInterval = 0.8
+
+    public static func acceptsAnswer(shownFor age: TimeInterval) -> Bool { age >= answerGuard }
 
     /// `doneAge`: seconds since the island first showed the current `.done`; nil if it has not shown it yet.
     public static func tone(_ state: IslandState, doneAge: TimeInterval? = nil) -> IslandTone {

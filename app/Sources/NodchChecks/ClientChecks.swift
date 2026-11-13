@@ -43,7 +43,7 @@ import NodchCore
             } else { check(false, "state maps Activity") }
             let pending = try NodState.decode(fixture(status: "running", approval: "pending", activity: true))
             if case .needsYou(let approval, let more) = mapper.map(pending, now: now) {
-                check(approval.messageID.hasSuffix("3") && approval.id.hasSuffix("4") && more == 0 && approval.bodyCut && approval.fields.first?.value == "Yes", "pending approval wins over running activity")
+                check(approval.messageID.hasSuffix("3") && approval.id.hasSuffix("4") && more == 0 && approval.bodyCut && approval.fields.first?.value == "Yes" && approval.question == "Finished", "pending approval wins over running activity and carries the question")
             } else { check(false, "pending approval wins") }
             var duplicate = try JSONSerialization.jsonObject(with: fixture(approval: "pending")) as! [String: Any]
             duplicate["messages"] = (duplicate["messages"] as! [[String: Any]]) + (duplicate["messages"] as! [[String: Any]])
