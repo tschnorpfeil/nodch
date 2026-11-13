@@ -167,8 +167,14 @@ import Foundation
 
     public func upload(file: URL) async throws -> NodAttachment {
         let started = generation
-        do { return try await client.upload(file: file) }
+        let attachment: NodAttachment
+        do { attachment = try await client.upload(file: file) }
         catch { handleActionError(error, started); throw error }
+        // Uploaded to the server nodch has just left: the new one doesn't know it, so it never joins a prompt.
+        guard started == generation else {
+            throw NodClientError.configuration("nodch switched to another Nod while this file was uploading. Drop it again.")
+        }
+        return attachment
     }
 
     public func answer(approval: PendingApproval, approved: Bool) async throws {

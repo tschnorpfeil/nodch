@@ -88,7 +88,11 @@ import ServiceManagement
         saved = nil
     }
 
-    func undoRemove() { removing = false }
+    func undoRemove() {
+        removing = false
+        resetTest()
+        saved = nil
+    }
 
     private var tokenChange: TokenChange {
         if !tokenEntry.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return .replace(tokenEntry) }
