@@ -9,5 +9,7 @@ import NodchCore
         hotkey()
         prompt()
         answers()
+        speech()
+        speechPrompt()
     }
 }

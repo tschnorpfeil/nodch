@@ -34,6 +34,12 @@ import Observation
     /// The wing's content. It stays while the wing shrinks back to rest, so the words do not vanish mid-motion.
     var shown = Shown()
     var hotkey: String? = HotkeySpec.standard.display
+    /// The dictation language picked from the microphone's menu; nil follows the system.
+    var speechChoice: String? = SpeechLanguage.choice(UserDefaults.standard.string(forKey: SpeechLanguage.defaultsKey))
+    /// What the microphone listens in right now (BCP 47), for the placeholder.
+    var listeningIn: String?
+    /// The languages the on-device model offers, loaded once when the menu is first wanted.
+    var speechLanguages: (yours: [String], others: [String]) = ([], [])
 
     struct Layout: Equatable {
         var notch = false
@@ -143,6 +149,21 @@ import Observation
     func dropped(_ files: [DroppedFile]) { perform(draft.drop(files)) }
     func removeAttachment(_ id: Int) { draft.remove(id) }
 
+    /// From the microphone's menu: nil follows the system again. A microphone that is on starts over in it.
+    func chooseSpeechLanguage(_ id: String?) {
+        guard id != speechChoice else { return }
+        speechChoice = id
+        if let id { UserDefaults.standard.set(id, forKey: SpeechLanguage.defaultsKey) } else {
+            UserDefaults.standard.removeObject(forKey: SpeechLanguage.defaultsKey)
+        }
+        perform(draft.languageChanged())
+    }
+
+    func loadSpeechLanguages() {
+        guard speechLanguages.yours.isEmpty, speechLanguages.others.isEmpty else { return }
+        Task { speechLanguages = SpeechLanguage.menu(supported: await SpeechSupport.supported(), system: Locale.preferredLanguages) }
+    }
+
     private func startVoice() {
         guard let voice else { draft.voiceUnavailable(.speechUnavailable); return }
         voice.start { [weak self] event in self?.heard(event) }
@@ -150,7 +171,9 @@ import Observation
 
     private func heard(_ event: VoiceEvent) {
         switch event {
-        case .started: draft.voiceStarted()
+        case .started(let language):
+            listeningIn = language
+            draft.voiceStarted()
         case .unavailable(let hint):
             voiceLevel = 0
             draft.voiceUnavailable(hint)

@@ -142,6 +142,22 @@ public struct PromptDraft: Equatable, Sendable {
         return [.stopVoice(finalize: false)]
     }
 
+    /// Another dictation language was chosen. A microphone that is on, or that the old language kept off, starts
+    /// over in the new one; the words heard so far stay. Otherwise it applies the next time.
+    public mutating func languageChanged() -> [PromptEffect] {
+        switch voice {
+        case .starting, .listening:
+            keepVolatile()
+            voice = .starting
+            return [.stopVoice(finalize: false), .startVoice]
+        case .unavailable(.speechUnavailable), .unavailable(.preparing):
+            voice = .off
+            return startVoice()
+        default:
+            return []
+        }
+    }
+
     public mutating func voiceStarted() {
         if voice == .starting { voice = .listening }
     }

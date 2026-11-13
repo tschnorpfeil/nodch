@@ -6,13 +6,24 @@ import Speech
 /// On-device speech to text with SpeechAnalyzer and SpeechTranscriber (macOS 26). Nothing leaves the Mac: the model
 /// is Apple's, downloaded once through AssetInventory. The microphone and `Nodch --transcribe` feed the same run.
 enum SpeechSupport {
-    static let fallback = Locale(identifier: "en-US")
-
-    /// The system's language if the transcriber knows it, otherwise US English; nil when on-device speech is missing.
-    static func locale(preferred: Locale = .current) async -> Locale? {
+    /// The chosen language (`SpeechLanguage`), else the first of the system's languages the transcriber knows, else
+    /// US English; nil when on-device speech is missing.
+    static func locale(choice: String? = savedChoice, system: [String] = Locale.preferredLanguages) async -> Locale? {
         guard SpeechTranscriber.isAvailable else { return nil }
-        if let locale = await SpeechTranscriber.supportedLocale(equivalentTo: preferred) { return locale }
-        return await SpeechTranscriber.supportedLocale(equivalentTo: fallback)
+        for id in SpeechLanguage.candidates(choice: choice, system: system) {
+            if let locale = await SpeechTranscriber.supportedLocale(equivalentTo: Locale(identifier: id)) { return locale }
+        }
+        return nil
+    }
+
+    static var savedChoice: String? {
+        SpeechLanguage.choice(UserDefaults.standard.string(forKey: SpeechLanguage.defaultsKey))
+    }
+
+    /// Every language the on-device model offers, as BCP 47 identifiers.
+    static func supported() async -> [String] {
+        guard SpeechTranscriber.isAvailable else { return [] }
+        return await SpeechTranscriber.supportedLocales.map { $0.identifier(.bcp47) }
     }
 
     /// Volatile results stream the words as they are heard; final ones replace them.
@@ -127,12 +138,11 @@ enum TranscribeCommand {
             FileHandle.standardError.write(Data("nodch: \(message)\n".utf8))
             return 1
         }
-        let preferred = identifier.map(Locale.init(identifier:)) ?? .current
-        guard let locale = await SpeechSupport.locale(preferred: preferred) else {
+        guard let locale = await SpeechSupport.locale(choice: identifier ?? SpeechSupport.savedChoice) else {
             return fail("on-device speech recognition is not available on this Mac")
         }
-        if identifier != nil, locale.language.languageCode != preferred.language.languageCode {
-            return fail("\(preferred.identifier) is not supported by the speech model")
+        if let identifier, locale.language.languageCode != Locale(identifier: identifier).language.languageCode {
+            return fail("\(identifier) is not supported by the speech model")
         }
         FileHandle.standardError.write(Data("nodch: transcribing in \(locale.identifier)\n".utf8))
         switch await SpeechSupport.assets(for: SpeechSupport.transcriber(locale)) {

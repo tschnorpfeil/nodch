@@ -4,7 +4,8 @@ import NodchCore
 import Speech
 
 enum VoiceEvent: Equatable {
-    case started
+    /// Listening, in this language (BCP 47).
+    case started(language: String)
     case unavailable(VoiceHint)
     case heard(String, final: Bool)
     /// 0…1, a few times a second while listening.
@@ -169,7 +170,7 @@ final class MicrophoneVoice: VoiceSource {
                 self.events?(.level(meter.take()))
             }
         }
-        events?(.started)
+        events?(.started(language: locale.identifier(.bcp47)))
     }
 
     /// The audio thread calls this block, not the main thread: built outside the main actor, or Swift 6 traps.

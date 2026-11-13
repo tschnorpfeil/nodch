@@ -189,7 +189,7 @@ struct IslandPromptCard: View {
     private func placeholder(_ draft: PromptDraft) -> String {
         switch draft.voice {
         case .starting: "Getting the microphone ready…"
-        case .listening: "Listening… or type"
+        case .listening: model.listeningIn.map { "Listening in \(SpeechLanguage.shortName($0))… or type" } ?? "Listening… or type"
         default:
             if !draft.attachments.isEmpty { "Ask about the files…" }
             else if model.asking != nil { "Or answer in your own words…" }
@@ -324,8 +324,9 @@ struct IslandMicButton: View {
         }
         .buttonStyle(.plain)
         .disabled(voice == .finishing || model.draft.sending)
-        .help(listening || voice == .starting ? "Stop listening" : "Dictate")
+        .help(listening || voice == .starting ? "Stop listening  ·  right-click for the language" : "Dictate  ·  right-click for the language")
         .accessibilityLabel(listening || voice == .starting ? "Stop listening" : "Dictate")
+        .contextMenu { IslandLanguageMenu(model: model) }
     }
 
     private var symbol: String {
@@ -342,6 +343,30 @@ struct IslandMicButton: View {
         case .starting, .finishing: IslandStyle.white(IslandStyle.secondary)
         case .unavailable: IslandStyle.white(IslandStyle.tertiary)
         case .off: IslandStyle.white(IslandStyle.secondary)
+        }
+    }
+}
+
+/// The dictation language: the system's by default, the person's own languages next, every other one below.
+struct IslandLanguageMenu: View {
+    var model: IslandModel
+
+    var body: some View {
+        let choice = Binding(get: { model.speechChoice }, set: { model.chooseSpeechLanguage($0) })
+        let menu = model.speechLanguages
+        Picker("Dictation Language", selection: choice) {
+            Text(menu.yours.first.map { "Automatic (\(SpeechLanguage.name($0)))" } ?? "Automatic").tag(String?.none)
+            ForEach(menu.yours, id: \.self) { Text(SpeechLanguage.name($0)).tag(Optional($0)) }
+        }
+        .pickerStyle(.inline)
+        if !menu.others.isEmpty {
+            Menu("Other Languages") {
+                Picker("Other Languages", selection: choice) {
+                    ForEach(menu.others, id: \.self) { Text(SpeechLanguage.name($0)).tag(Optional($0)) }
+                }
+                .pickerStyle(.inline)
+                .labelsHidden()
+            }
         }
     }
 }
