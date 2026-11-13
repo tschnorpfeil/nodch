@@ -13,6 +13,52 @@ extension IslandChecks {
             return draft
         }
 
+        var finishing = listening(final: "Hello", volatile: "world")
+        check(finishing.toggleVoice() == [.stopVoice(finalize: true)] && finishing.voice == .finishing,
+              "dictation: toggle finalizes to an editable draft")
+        let takeover = finishing.typed("!")
+        check(takeover == [.stopVoice(finalize: false)] && finishing.display == "Hello world!",
+              "dictation: typing takes over during finalization")
+        finishing.heard("late", final: true)
+        check(finishing.voiceFinished().isEmpty && finishing.display == "Hello world!" && !finishing.sending,
+              "dictation: late results cannot change or send an edit")
+        var done = listening(final: "Hello")
+        _ = done.toggleVoice()
+        done.heard("world", final: true)
+        check(done.voiceFinished().isEmpty && done.display == "Hello world" && !done.sending,
+              "dictation: finalization leaves an editable draft without sending")
+
+        var activity = VoiceActivity(started: 0)
+        check(activity.sample(level: 0.6, at: 9.9) == nil && activity.sample(level: 0.6, at: 10) == true,
+              "dictation: background noise does not count as speech; initial timeout")
+        activity = VoiceActivity(started: 0)
+        _ = activity.sample(level: 0.1, at: 0)
+        activity.words("Hello", at: 1)
+        check(activity.sample(level: 0.1, at: 2.4) == nil, "dictation: short pause stays listening")
+        check(activity.sample(level: 0.7, at: 2.4) == nil && activity.sample(level: 0.1, at: 3.8) == nil,
+              "dictation: resumed speech resets silence")
+        check(activity.sample(level: 0.1, at: 3.9) == false, "dictation: sustained silence finishes")
+        var hum = VoiceActivity(started: 0)
+        hum.words("Hello", at: 1)
+        _ = hum.sample(level: 0.8, at: 3.9)
+        check(hum.sample(level: 0.8, at: 5.4) == false,
+              "dictation: continuous hum cannot extend speech indefinitely without recognition")
+        var explicitSend = listening(final: "Hello")
+        _ = explicitSend.finishVoice()
+        check(explicitSend.submit().isEmpty, "dictation: Return during transcription waits for final words")
+        explicitSend.heard("world", final: true)
+        check(explicitSend.voiceFinished() == [.send(prompt: "Hello world", attachments: [])],
+              "dictation: Return during transcription sends exactly once")
+        var silent = listening(final: "")
+        check(silent.finishVoice(noSpeech: true) == [.stopVoice(finalize: true)], "dictation: timeout releases microphone")
+        check(silent.voiceFinished().isEmpty && silent.voice == .unavailable(.noSpeech), "dictation: no speech is readable")
+        var cancelled = listening(final: "keep")
+        _ = cancelled.finishVoice()
+        _ = cancelled.escape()
+        cancelled.heard("late", final: true)
+        check(cancelled.voiceFinished().isEmpty && cancelled.display.isEmpty && !cancelled.sending,
+              "dictation: escape discards and ignores late results")
+
         // The live line.
         let live = listening(final: "Please summarize my unread email", volatile: "from today")
         check(live.live.heard == "Please summarize my unread email" && live.live.hearing == " from today",
