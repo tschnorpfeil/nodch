@@ -19,5 +19,10 @@ extension IslandChecks {
         let single = NodQuestion(choices: [.init(id: "c1", label: "Now")], multiple: false)
         check(P.promptHints(question: single, discards: true).hasSuffix("esc discard")
               && P.promptHints(question: single, discards: false).hasSuffix("esc close"), "keys: question hints name what Escape does")
+
+        // Up and Down belong to the field once it has words.
+        check(P.arrowsMoveChoices(field: "", choices: 3), "keys: arrows move between choices while the field is empty")
+        check(!P.arrowsMoveChoices(field: "und vormittags", choices: 3), "keys: arrows stay in a field with words")
+        check(!P.arrowsMoveChoices(field: "", choices: 0), "keys: arrows without choices stay in the field")
     }
 }

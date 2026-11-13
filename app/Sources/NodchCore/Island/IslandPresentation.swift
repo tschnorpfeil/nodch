@@ -110,6 +110,9 @@ public enum IslandPresentation {
         return (question.multiple ? "↑↓ navigate  ·  ↩ select  ·  Send to answer" : "↑↓ navigate  ·  ↩ answer") + "  ·  " + escape
     }
 
+    /// Up and Down move between choices only while the field is empty; with words in it they belong to the field.
+    public static func arrowsMoveChoices(field: String, choices: Int) -> Bool { field.isEmpty && choices > 0 }
+
     /// The short name of the state, for the card's header and VoiceOver.
     public static func heading(_ tone: IslandTone) -> String {
         switch tone {
