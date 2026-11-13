@@ -1,6 +1,7 @@
 import Foundation
 
-/// The fields consumed from Nod 915e4f1's AppState. Unknown fields remain server-owned.
+/// The fields consumed from Nod 915e4f1's AppState. Unknown fields remain server-owned. Fields beyond the approval and
+/// activity seam are optional, so an older or newer Nod that omits them still decodes.
 public struct NodState: Decodable, Sendable {
     public struct Message: Decodable, Sendable {
         public struct Approval: Decodable, Sendable {
@@ -14,11 +15,24 @@ public struct NodState: Decodable, Sendable {
             public let body: String?
             public let bodyCut: Bool?
         }
+        /// Nod's `AnswerChoices` (src/shared/answer-choices.ts); decoded leniently, Nod validates answers itself.
+        public struct AnswerChoices: Decodable, Sendable {
+            public struct Option: Decodable, Sendable {
+                public let id: String
+                public let label: String
+                public let description: String?
+            }
+            public let options: [Option]?
+            public let multiple: Bool?
+        }
         public let id: String
         public let role: String
         public let text: String
         public let turnId: String?
+        public let createdAt: String?
         public let approval: Approval?
+        public let answerChoices: AnswerChoices?
+        public let answerChoicesPending: Bool?
     }
     public struct Turn: Decodable, Sendable {
         public let id: String
@@ -44,6 +58,7 @@ public struct NodState: Decodable, Sendable {
     public let messages: [Message]
     public let turns: [Turn]
     public let activity: [Activity]?
+    public let pendingAnswerChoiceMessageIds: [String]?
 
     public static func decode(_ data: Data) throws -> Self { try JSONDecoder().decode(Self.self, from: data) }
 }
@@ -82,6 +97,8 @@ public struct NodStateMapper: Sendable {
             return .working(WorkActivity(title: nil, step: nil, site: nil, since: Self.date(running.createdAt) ?? now,
                                          doing: running.status == "queued" ? .queued : .model))
         }
+        // A question Nod waits on outranks the "done" moment of the turn that asked it.
+        if let asked = answer(state), asked.question != nil { doneUntil = nil; return .asks(asked) }
         if let latest, latest.status == "failed", latest.source != "event", let previous,
            previous.turns.first(where: { $0.id == latest.id })?.status != "failed" {
             failedTurn = latest.id
@@ -97,6 +114,36 @@ public struct NodStateMapper: Sendable {
         }
         if let until = doneUntil, now < until { return .done(summary: doneSummary) }
         return .rest
+    }
+
+    /// Nod's latest answer: the newest assistant message with nonempty text and without an approval card (that one is
+    /// shown as `.needsYou`). Messages of a running or queued turn are skipped: Nod refreshes state while the turn works,
+    /// and its text can still change or grow, so the panel would flicker through half-written answers. The last finished
+    /// answer stays until the turn ends. A turn waiting on a question has status "waiting", so open questions still show.
+    public func answer(_ state: NodState) -> NodAnswer? {
+        let busy = Set(state.turns.filter { $0.status == "running" || $0.status == "queued" }.map(\.id))
+        let pendingIDs = Set(state.pendingAnswerChoiceMessageIds ?? [])
+        let latest = state.messages.enumerated()
+            .filter { _, message in
+                message.role == "assistant" && message.approval == nil
+                    && !message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    && !(message.turnId.map(busy.contains) ?? false)
+            }
+            // Nod lists messages oldest first; createdAt decides, the list order breaks ties.
+            .max { lhs, rhs in
+                let left = lhs.element.createdAt.flatMap(Self.date) ?? .distantPast
+                let right = rhs.element.createdAt.flatMap(Self.date) ?? .distantPast
+                return left == right ? lhs.offset < rhs.offset : left < right
+            }?.element
+        guard let latest else { return nil }
+        var question: NodQuestion?
+        if let choices = latest.answerChoices, let options = choices.options, !options.isEmpty,
+           latest.answerChoicesPending == true || pendingIDs.contains(latest.id) {
+            question = NodQuestion(choices: options.map { .init(id: $0.id, label: $0.label, detail: $0.description) },
+                                   multiple: choices.multiple ?? false)
+        }
+        return NodAnswer(id: latest.id, text: latest.text, at: latest.createdAt.flatMap(Self.date) ?? .distantPast,
+                         question: question)
     }
 
     private static func date(_ text: String) -> Date? {

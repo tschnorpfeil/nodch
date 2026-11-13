@@ -5,7 +5,8 @@ import NodchCore
     static func run() async {
         parserChecks()
         mappingChecks()
-        do { try configurationChecks(); try await transportChecks(); try await uploadChecks() }
+        answerMappingChecks()
+        do { try configurationChecks(); try await transportChecks(); try await uploadChecks(); try await answerChecks() }
         catch { check(false, "client checks: \(error)") }
     }
 

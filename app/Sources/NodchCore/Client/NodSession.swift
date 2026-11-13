@@ -113,6 +113,7 @@ import Foundation
 
     private func apply(_ state: NodState) {
         store.state = mapper.map(state)
+        store.answer = mapper.answer(state)
         if case .done = store.state {
             guard doneTask == nil else { return }
             doneTask = Task { [weak self] in
@@ -142,14 +143,22 @@ import Foundation
 
     public func answer(approval: PendingApproval, approved: Bool) async throws {
         do { _ = try await client.answer(approval: approval, approved: approved); refreshAfterChange() }
-        catch let error as NodClientError {
-            if case .conflict = error {
-                // Wait out any older snapshot, then fetch after the conflict. Never repeat the POST.
-                if let fetchTask { _ = try? await fetchTask.value }
-                try? await refresh()
-            } else { handleActionError(error) }
-            throw error
-        }
+        catch let error as NodClientError { try await handleAnswerError(error) }
+    }
+
+    public func answer(question: NodAnswer, choices: [NodQuestion.Choice], text: String) async throws {
+        do { _ = try await client.answer(question: question, choices: choices, text: text); refreshAfterChange() }
+        catch let error as NodClientError { try await handleAnswerError(error) }
+    }
+
+    /// A 409 means the approval or question is gone (Nod: `question_unavailable` for questions).
+    private func handleAnswerError(_ error: NodClientError) async throws -> Never {
+        if case .conflict = error {
+            // Wait out any older snapshot, then fetch after the conflict. Never repeat the POST.
+            if let fetchTask { _ = try? await fetchTask.value }
+            try? await refresh()
+        } else { handleActionError(error) }
+        throw error
     }
 
     public func stop() async throws {
