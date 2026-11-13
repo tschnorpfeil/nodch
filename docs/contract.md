@@ -79,10 +79,10 @@ let store = session.store
 session.start()
 ```
 
-This client-only change does not wire the placeholder Nodch executable to a UI;
-the island integration is separate. The session implements the existing
-`NodActions` seam without modifying `Model.swift`. `openNod(path:)` opens the
-configured HTTP server plus the requested path using `NSWorkspace`.
+The app does this in `makeNodSession` (Connection.swift): it creates the session
+with the island's store and starts it. The session implements the `NodActions` seam
+in `Model.swift`. `openNod(path:)` opens the configured HTTP server plus the
+requested path using `NSWorkspace`.
 
 For interactive client assertions against the running fixture:
 
