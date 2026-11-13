@@ -59,6 +59,7 @@ final class IslandController {
             guard let self else { return }
             openCause = nil
             model.isOpen = false
+            model.highlightedChoice = nil
             model.perform(model.draft.closed())
         }
         presenter.view.onDragOver = { [weak self] over in self?.dragOver(over) }
