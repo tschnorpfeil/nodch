@@ -237,7 +237,6 @@ import Observation
         Task {
             do {
                 try await actions.answer(question: asked, choices: choices, text: text)
-                if asking?.id == asked.id { picked = [] }
                 finishSend(token: token, questionID: asked.id, keepingText: text.isEmpty)
             } catch {
                 failSend(error, token: token, questionID: asked.id)
@@ -255,7 +254,6 @@ import Observation
             do {
                 if let asked {
                     try await actions.answer(question: asked, choices: asked.question?.multiple == true ? choices : [], text: prompt)
-                    if asking?.id == asked.id { picked = [] }
                 } else {
                     try await actions.send(prompt: prompt, attachments: attachments)
                 }
@@ -269,6 +267,7 @@ import Observation
     /// A later question can arrive before Nod acknowledges this send. Complete the old draft without closing it.
     private func finishSend(token: Int, questionID: String?, keepingText: Bool = false) {
         guard draft.sending, draft.sendToken == token else { return }
+        if let questionID, asking?.id == questionID { picked = [] }
         if keepingText { draft.answeredKeepingText(token: token) } else { _ = draft.sent(token: token) }
         if let current = asking, current.id != questionID {
             if isOpen { focusToken += 1 }
@@ -279,8 +278,10 @@ import Observation
 
     private func failSend(_ error: Error, token: Int, questionID: String?) {
         guard draft.sending, draft.sendToken == token else { return }
-        draft.sendFailed(Self.describe(error), token: token)
-        if isOpen, let current = asking, current.id != questionID { focusToken += 1 }
+        let newQuestion = asking.map { $0.id != questionID } ?? false
+        let prefix = newQuestion ? (questionID == nil ? "Couldn’t send the previous message: " : "Couldn’t send the previous answer: ") : ""
+        draft.sendFailed(prefix + Self.describe(error), token: token)
+        if isOpen, newQuestion { focusToken += 1 }
     }
 
     func openNod(path: String = "/") {
