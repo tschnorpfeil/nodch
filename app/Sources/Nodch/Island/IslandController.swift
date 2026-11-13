@@ -34,7 +34,10 @@ final class IslandController {
             refresh()
         }
         presenter.view.onPanelShown = { [weak self] in
-            guard let self, model.showsPrompt else { return }
+            guard let self else { return }
+            // Reopening keeps the SwiftUI card alive, so its onAppear does not run: restart the click guard here.
+            if model.approval != nil, !model.showsPrompt { model.approvalShownAt = Date() }
+            guard model.showsPrompt else { return }
             model.focusToken += 1
         }
         presenter.onEscape = { [weak self] in self?.escape() }
