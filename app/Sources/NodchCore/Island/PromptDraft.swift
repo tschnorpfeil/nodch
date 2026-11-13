@@ -81,6 +81,8 @@ public struct PromptDraft: Equatable, Sendable {
     public private(set) var error: String?
     /// A quiet line under the field: a drop that left something out, or why Return waits.
     public private(set) var notice: String?
+    /// Names the send that is out. A discarded draft's send that finishes late carries an older token and is ignored.
+    public private(set) var sendToken = 0
     private var nextID = 1
 
     public init(text: String = "") { self.text = text }
@@ -181,7 +183,7 @@ public struct PromptDraft: Equatable, Sendable {
     public mutating func submit() -> [PromptEffect] {
         guard !sending, voice != .finishing else { return [] }
         if uploading { notice = Self.waitsForUploads; return [] }
-        guard !trimmed.isEmpty || !ready.isEmpty else { return [] }
+        // Before the first words show, the microphone may already have heard some: finalize, then send what came.
         if voice.isActive {
             voice = .finishing
             return [.stopVoice(finalize: true)]
@@ -201,20 +203,23 @@ public struct PromptDraft: Equatable, Sendable {
         let prompt = trimmed, files = ready
         guard !uploading, !prompt.isEmpty || !files.isEmpty else { return [] }
         sending = true
+        sendToken = nextID
+        nextID += 1
         error = nil
         notice = nil
         return [.send(prompt: prompt, attachments: files)]
     }
 
     /// Nod took the message: the prompt starts empty next time. False when no send was out (it was discarded).
-    public mutating func sent() -> Bool {
-        guard sending else { return false }
+    /// `token`: the `sendToken` the send went out with; nil means the current one.
+    public mutating func sent(token: Int? = nil) -> Bool {
+        guard sending, token ?? sendToken == sendToken else { return false }
         self = PromptDraft(continuing: nextID)
         return true
     }
 
-    public mutating func sendFailed(_ message: String) {
-        guard sending else { return }
+    public mutating func sendFailed(_ message: String, token: Int? = nil) {
+        guard sending, token ?? sendToken == sendToken else { return }
         sending = false
         error = message
     }

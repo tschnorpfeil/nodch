@@ -81,8 +81,27 @@ extension IslandChecks {
         _ = failing.submit()
         failing.sendFailed("503")
         check(failing.error == "503" && failing.display == "Hi" && !failing.sending, "prompt: a failed send keeps the text and says why")
-        var empty = listening()
-        check(empty.submit().isEmpty && empty.voice == .listening, "prompt: Enter on nothing keeps listening")
+        // Enter before the first words show: the microphone may have heard some, so it finalizes and sends what came.
+        var early = listening()
+        check(early.submit() == [.stopVoice(finalize: true)] && early.voice == .finishing, "prompt: Enter before any words still stops the microphone")
+        early.heard("Call mum", final: true)
+        check(early.voiceFinished() == [.send(prompt: "Call mum", attachments: [])], "prompt: … and sends the words that were still on their way")
+        var starting2 = PromptDraft()
+        _ = starting2.open(.hotkey)
+        check(starting2.submit() == [.stopVoice(finalize: true)] && starting2.voice == .finishing, "prompt: Enter while the microphone starts stops it")
+        check(starting2.voiceFinished().isEmpty && starting2.voice == .off && !starting2.sending, "prompt: … and with nothing heard sends nothing")
+
+        // A send from a discarded draft that finishes late leaves the new draft alone.
+        var stale = PromptDraft(text: "A")
+        _ = stale.submit()
+        let old = stale.sendToken
+        _ = stale.escape()
+        _ = stale.typed("B")
+        _ = stale.submit()
+        check(!stale.sent(token: old) && stale.sending && stale.display == "B", "prompt: a discarded send's success does not clear the new one")
+        stale.sendFailed("late", token: old)
+        check(stale.sending && stale.error == nil, "prompt: a discarded send's failure does not unlock the new one")
+        check(stale.sent(token: stale.sendToken) && !stale.sending, "prompt: the current send still completes")
 
         // Closing.
         var closed = listening("Remind me")

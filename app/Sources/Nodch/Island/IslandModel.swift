@@ -167,12 +167,13 @@ import Observation
 
     private func send(_ prompt: String, _ attachments: [NodAttachment]) {
         guard let actions = store.actions else { draft.sendFailed(Self.notConnected); return }
+        let token = draft.sendToken
         Task {
             do {
                 try await actions.send(prompt: prompt, attachments: attachments)
-                if draft.sent() { onSent() }
+                if draft.sent(token: token) { onSent() }
             } catch {
-                draft.sendFailed(Self.describe(error))
+                draft.sendFailed(Self.describe(error), token: token)
             }
         }
     }
