@@ -270,6 +270,7 @@ final class IslandController {
         case .approve: model.answer(approved: true)
         case .decline: model.answer(approved: false)
         case .stop: model.stop()
+        case .sendPicks: model.sendPicks()
         }
         return true
     }

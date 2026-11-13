@@ -36,6 +36,14 @@ extension IslandChecks {
         check(P.hotkey(open: true, prompt: false, key: true, approvalCard: true) == .prompt,
               "keys: pressed again, the shortcut brings the prompt and the approval waits in the wing")
 
+        // A multiple-choice question: Return ticks, ⌥Return sends the ticks while the field is empty.
+        check(P.keyAction(.returnKey, .option, offers: .init(picks: true)) == .sendPicks, "keys: ⌥Return sends the ticked choices")
+        check(P.keyAction(.returnKey, .option, offers: .init(picks: false)) == nil, "keys: ⌥Return without ticks (or with words) stays in the field")
+        check(P.keyAction(.returnKey, .none, offers: .init(picks: true)) == nil, "keys: plain Return keeps ticking choices")
+        let several = NodQuestion(choices: [.init(id: "p1", label: "Newsletter")], multiple: true)
+        check(P.promptHints(question: several, discards: false) == "↑↓ navigate  ·  ↩ select  ·  ⌥↩ send  ·  esc close",
+              "keys: a multiple-choice question names ⌥↩ send")
+
         // Escape discards a draft with something in it; the hint must say so.
         var empty = PromptDraft()
         check(!empty.discardsOnEscape && P.promptHints(question: nil, discards: false) == "↩ send  ·  esc close",

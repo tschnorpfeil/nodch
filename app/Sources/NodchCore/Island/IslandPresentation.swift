@@ -110,7 +110,7 @@ public enum IslandPresentation {
     public static func promptHints(question: NodQuestion?, discards: Bool) -> String {
         let escape = discards ? "esc discard" : "esc close"
         guard let question, !question.choices.isEmpty else { return "↩ send  ·  " + escape }
-        return (question.multiple ? "↑↓ navigate  ·  ↩ select  ·  Send to answer" : "↑↓ navigate  ·  ↩ answer") + "  ·  " + escape
+        return (question.multiple ? "↑↓ navigate  ·  ↩ select  ·  ⌥↩ send" : "↑↓ navigate  ·  ↩ answer") + "  ·  " + escape
     }
 
     /// Up and Down move between choices only while the field is empty; with words in it they belong to the field.
@@ -189,19 +189,22 @@ public enum IslandPresentation {
         public var approval: Bool
         /// A Stop button for the running turn.
         public var stop: Bool
+        /// Ticked choices on a multiple-choice question, and an empty field: they can go out as they are.
+        public var picks: Bool
 
-        public init(approval: Bool = false, stop: Bool = false) {
-            self.approval = approval; self.stop = stop
+        public init(approval: Bool = false, stop: Bool = false, picks: Bool = false) {
+            self.approval = approval; self.stop = stop; self.picks = picks
         }
     }
 
-    public enum KeyAction: Equatable, Sendable { case approve, decline, stop }
+    public enum KeyAction: Equatable, Sendable { case approve, decline, stop, sendPicks }
 
-    /// ⌥Return approves and ⌥⌫ declines on the approval card; ⌘. stops a running turn. Plain Return never approves.
+    /// ⌥Return approves and ⌥⌫ declines on the approval card; ⌥Return sends ticked choices (like their Send button);
+    /// ⌘. stops a running turn. Plain Return never approves and keeps ticking choices.
     /// The app asks only while the island has the keyboard, and Approve and Decline still wait out `answerGuard`.
     public static func keyAction(_ key: CardKey, _ modifier: KeyModifier, offers: CardOffers) -> KeyAction? {
         switch (key, modifier) {
-        case (.returnKey, .option): offers.approval ? .approve : nil
+        case (.returnKey, .option): offers.approval ? .approve : offers.picks ? .sendPicks : nil
         case (.delete, .option): offers.approval ? .decline : nil
         case (.period, .command): offers.stop ? .stop : nil
         default: nil

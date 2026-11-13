@@ -95,8 +95,10 @@ import Observation
     var showsApprovalCard: Bool { !showsPromptCard && approval != nil }
     /// What the open card offers to the keyboard (`IslandPresentation.keyAction`).
     var cardOffers: IslandPresentation.CardOffers {
-        guard isOpen, !showsPromptCard else { return .init() }
-        return .init(approval: approval != nil, stop: tone == .working)
+        guard isOpen else { return .init() }
+        guard showsPromptCard else { return .init(approval: approval != nil, stop: tone == .working) }
+        let field = draft.display.trimmingCharacters(in: .whitespacesAndNewlines)
+        return .init(picks: asking?.question?.multiple == true && !picked.isEmpty && field.isEmpty && !draft.sending)
     }
     var approval: (PendingApproval, more: Int)? {
         if case .needsYou(let approval, let more) = store.state { (approval, more) } else { nil }
