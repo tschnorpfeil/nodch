@@ -39,6 +39,14 @@ nodch talks to a Nod you run from source or self-host (the Nod desktop app keeps
 NOD_URL=http://127.0.0.1:4310 NOD_DATA_ROOT=/path/to/nod/.local swift run --package-path app Nodch
 ```
 
+For a self-hosted Nod (Nod's `deployment/self-host` stack), pass the token from its `.env` and use the host of its
+`NOD_PUBLIC_URL`, by default `localhost`. Nod answers any other host, including `127.0.0.1`, with 403 "This host is
+not permitted":
+
+```sh
+NOD_URL=http://localhost:4310 NOD_AUTH_TOKEN=<NOD_AUTH_TOKEN from .env> swift run --package-path app Nodch
+```
+
 `NOD_AUTH_TOKEN` replaces the access key when Nod runs with one.
 
 For voice, run nodch as an app, so macOS asks for the microphone for nodch and not for your terminal:
