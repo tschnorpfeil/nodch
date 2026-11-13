@@ -140,7 +140,7 @@ struct IslandPromptCard: View {
             }
             HStack(alignment: .top, spacing: IslandStyle.buttonGap) {
                 field(draft)
-                IslandOpenButton(model: model)
+                IslandOpenButton(model: model, showsKey: false)
             }
             if !draft.attachments.isEmpty {
                 IslandChips(model: model, attachments: draft.attachments)
@@ -705,10 +705,10 @@ struct IslandApprovalCard: View {
         .onChange(of: approval.id) { model.startAnswerGuard() }
     }
 
-    /// Title, question, fields and body scroll together in what the display leaves after the button row, so the
-    /// decision stays reachable however long Nod's text is.
+    /// Title, question, fields and body scroll together in what the display leaves after the button row and the key
+    /// line (26 pt of the reserve), so the decision stays reachable however long Nod's text is.
     private var detailsMax: CGFloat {
-        max(120, model.layout.maxContent - 170)
+        max(120, model.layout.maxContent - 196)
     }
 
     private var details: some View {
@@ -879,15 +879,19 @@ struct IslandErrorLine: View {
 struct IslandOpenButton: View {
     var model: IslandModel
     var prominent = false
+    /// ⌘↩ in the button; off beside the prompt field, whose footer names it instead.
+    var showsKey = true
 
     var body: some View {
         Button { model.openNod() } label: {
             HStack(spacing: 5) {
                 Text("Open Nod")
                 Image(systemName: "arrow.up.right").font(.system(size: 9, weight: .bold)).opacity(0.8)
-                // The key in the hint style, inside the button: the card does not grow for it.
-                Text("⌘↩").font(IslandStyle.caption).foregroundStyle(IslandStyle.white(IslandStyle.tertiary))
-                    .accessibilityHidden(true)
+                // The key in the hint style, inside the button: these rows have room, so the card does not grow.
+                if showsKey {
+                    Text("⌘↩").font(IslandStyle.caption).foregroundStyle(IslandStyle.white(IslandStyle.tertiary))
+                        .accessibilityHidden(true)
+                }
             }
         }
         .buttonStyle(IslandButtonStyle(prominent: prominent))

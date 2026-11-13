@@ -106,11 +106,12 @@ public enum IslandPresentation {
         return choices[min(max(index + (down ? 1 : -1), 0), choices.count - 1)]
     }
 
-    /// The quiet key line under the prompt. `discards`: Escape would throw away words or files.
+    /// The quiet key line under the prompt. `discards`: Escape would throw away words or files. ⌘↩ is named here,
+    /// not in the Open Nod button beside the field: a wider button would narrow the field and wrap its placeholder.
     public static func promptHints(question: NodQuestion?, discards: Bool) -> String {
-        let escape = discards ? "esc discard" : "esc close"
-        guard let question, !question.choices.isEmpty else { return "↩ send  ·  " + escape }
-        return (question.multiple ? "↑↓ navigate  ·  ↩ select  ·  ⌥↩ send" : "↑↓ navigate  ·  ↩ answer") + "  ·  " + escape
+        let tail = "  ·  " + (discards ? "esc discard" : "esc close") + "  ·  ⌘↩ open Nod"
+        guard let question, !question.choices.isEmpty else { return "↩ send" + tail }
+        return (question.multiple ? "↑↓ navigate  ·  ↩ select  ·  ⌥↩ send" : "↑↓ navigate  ·  ↩ answer") + tail
     }
 
     /// Up and Down move between choices only while the field is empty; with words in it they belong to the field.

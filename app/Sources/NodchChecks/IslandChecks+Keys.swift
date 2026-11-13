@@ -46,22 +46,22 @@ extension IslandChecks {
         check(P.keyAction(.returnKey, .option, offers: .init(picks: false)) == nil, "keys: ⌥Return without ticks (or with words) stays in the field")
         check(P.keyAction(.returnKey, .none, offers: .init(picks: true)) == nil, "keys: plain Return keeps ticking choices")
         let several = NodQuestion(choices: [.init(id: "p1", label: "Newsletter")], multiple: true)
-        check(P.promptHints(question: several, discards: false) == "↑↓ navigate  ·  ↩ select  ·  ⌥↩ send  ·  esc close",
+        check(P.promptHints(question: several, discards: false) == "↑↓ navigate  ·  ↩ select  ·  ⌥↩ send  ·  esc close  ·  ⌘↩ open Nod",
               "keys: a multiple-choice question names ⌥↩ send")
 
         // Escape discards a draft with something in it; the hint must say so.
         var empty = PromptDraft()
-        check(!empty.discardsOnEscape && P.promptHints(question: nil, discards: false) == "↩ send  ·  esc close",
+        check(!empty.discardsOnEscape && P.promptHints(question: nil, discards: false) == "↩ send  ·  esc close  ·  ⌘↩ open Nod",
               "keys: an empty prompt says esc close")
         _ = empty.typed("Hello")
-        check(empty.discardsOnEscape && P.promptHints(question: nil, discards: true) == "↩ send  ·  esc discard",
+        check(empty.discardsOnEscape && P.promptHints(question: nil, discards: true) == "↩ send  ·  esc discard  ·  ⌘↩ open Nod",
               "keys: a prompt with words says esc discard")
         var files = PromptDraft()
         _ = files.drop([DroppedFile(url: URL(fileURLWithPath: "/tmp/drop/a.pdf"), isDirectory: false)])
         check(files.discardsOnEscape, "keys: a prompt with only files also discards on Escape")
         let single = NodQuestion(choices: [.init(id: "c1", label: "Now")], multiple: false)
-        check(P.promptHints(question: single, discards: true).hasSuffix("esc discard")
-              && P.promptHints(question: single, discards: false).hasSuffix("esc close"), "keys: question hints name what Escape does")
+        check(P.promptHints(question: single, discards: true).contains("esc discard")
+              && P.promptHints(question: single, discards: false).contains("esc close"), "keys: question hints name what Escape does")
 
         // Up and Down belong to the field once it has words.
         check(P.arrowsMoveChoices(field: "", choices: 3), "keys: arrows move between choices while the field is empty")
