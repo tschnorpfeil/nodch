@@ -40,6 +40,7 @@ extension IslandChecks {
         // First keystroke.
         draft = listening("Please summarize")
         draft.heard("my unread", final: false)
+        draft.fieldShows(draft.display) // the card keeps the field's editor in step with the words
         let typed = draft.typed(draft.display + "!")
         check(typed == [.stopVoice(finalize: false)] && draft.voice == .off && draft.display == "Please summarize my unread!",
               "prompt: keystroke → voice off, transcript kept")

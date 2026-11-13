@@ -33,6 +33,7 @@ extension IslandChecks {
 
         // The field showed an older part of the dictation.
         var partial = listening(final: "Please summarize my unread email", volatile: "from today")
+        partial.fieldShows("Please summarize")
         _ = partial.typed("Please summarize and")
         check(partial.display == "Please summarize my unread email from today and",
               "dictation: a field behind the transcript keeps all of it: \(partial.display)")
@@ -42,16 +43,30 @@ extension IslandChecks {
         _ = typedFirst.typed("Hello!")
         check(typedFirst.display == "Hello world!", "dictation: text typed before dictating stays in front: \(typedFirst.display)")
 
-        // The field was up to date: edits are taken as they are.
-        var atEnd = listening(final: "Book a table")
+        // The field was up to date (the card pushed the words into it): edits are taken as they are.
+        func synced(_ words: String) -> PromptDraft { var d = listening(final: words); d.fieldShows(d.display); return d }
+        var atEnd = synced("Book a table")
         _ = atEnd.typed("Book a table for two")
         check(atEnd.display == "Book a table for two", "dictation: typing at the end of the full text")
-        var backspace = listening(final: "Book a table")
+        var backspace = synced("Book a table")
         _ = backspace.typed("Book a tabl")
         check(backspace.display == "Book a tabl", "dictation: one Backspace on the full text")
-        var inside = listening(final: "Book a table")
+        var inside = synced("Book a table")
         _ = inside.typed("Book a big table")
         check(inside.display == "Book a big table", "dictation: an insertion inside the full text")
+
+        var pasted = synced("Book a table")
+        _ = pasted.typed("Send an email")
+        check(pasted.display == "Send an email", "dictation: a paste over the selected full text replaces it (review S1)")
+        var cleared = synced("Book a table")
+        _ = cleared.typed("")
+        check(cleared.display.isEmpty, "dictation: select all and delete clears it (review S1)")
+        var word = synced("Book a table")
+        _ = word.typed("Book a ")
+        check(word.display == "Book a ", "dictation: ⌥⌫ deletes the last word (review S1)")
+        var sameLetter = listening(final: "Hello")
+        _ = sameLetter.typed("H")
+        check(sameLetter.display == "HelloH", "dictation: a first key that matches the dictation's start is not lost (review S1): \(sameLetter.display)")
 
         // After taking over, the keyboard edits the text as usual.
         _ = stale.typed(stale.display + " please")

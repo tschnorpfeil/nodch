@@ -171,7 +171,9 @@ struct IslandPromptCard: View {
             if live { liveWords(draft) }
         }
             .font(IslandStyle.body)
-            .onChange(of: draft.display) { IslandFieldEditor.show(model.draft.display) }
+            .onChange(of: draft.display) {
+                if let shown = IslandFieldEditor.show(model.draft.display) { model.draft.fieldShows(shown) }
+            }
             .padding(.vertical, 6)
             .padding(.trailing, 50)
             .padding(.horizontal, 10)
@@ -274,13 +276,16 @@ struct IslandPromptCard: View {
 /// The focused field's editor, from AppKit. SwiftUI may leave it at an older text when the binding changes from
 /// outside (the transcriber) while it is being edited; then the next keystroke would edit that older text. `show`
 /// puts the draft's text into it, caret at the end. A no-op when the editor already shows it, holds an unfinished
-/// input-method composition, or is not the island's.
+/// input-method composition, or is not the island's. Returns what the editor holds afterwards, nil when unknown.
 @MainActor enum IslandFieldEditor {
-    static func show(_ text: String) {
+    static func show(_ text: String) -> String? {
         guard let window = NSApp.keyWindow as? IslandPanel, let editor = window.firstResponder as? NSTextView,
-              editor.isFieldEditor, !editor.hasMarkedText(), editor.string != text else { return }
-        editor.string = text
-        editor.setSelectedRange(NSRange(location: (text as NSString).length, length: 0))
+              editor.isFieldEditor, !editor.hasMarkedText() else { return nil }
+        if editor.string != text {
+            editor.string = text
+            editor.setSelectedRange(NSRange(location: (text as NSString).length, length: 0))
+        }
+        return editor.string
     }
 }
 

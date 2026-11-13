@@ -74,6 +74,9 @@ public struct PromptDraft: Equatable, Sendable {
     /// The words still being recognized; they follow `text` in the field.
     public private(set) var volatile = ""
     public private(set) var voice: VoiceState = .off
+    /// What the focused field really holds, as last seen: when the microphone went on, then whenever the card pushed
+    /// the words into the field's editor. Nil when unknown.
+    public private(set) var fieldText: String?
     public private(set) var attachments: [PromptAttachment] = []
     /// A send is out; the field and Return wait for it.
     public private(set) var sending = false
@@ -135,6 +138,7 @@ public struct PromptDraft: Equatable, Sendable {
     public mutating func startVoice() -> [PromptEffect] {
         guard !sending, voice != .finishing, !voice.isActive else { return [] }
         voice = .starting
+        fieldText = display
         return [.startVoice]
     }
 
@@ -161,6 +165,9 @@ public struct PromptDraft: Equatable, Sendable {
             return []
         }
     }
+
+    /// The card put `shown` into the focused field's editor (or found it there).
+    public mutating func fieldShows(_ shown: String) { fieldText = shown }
 
     public mutating func voiceStarted() {
         if voice == .starting { voice = .listening }
@@ -191,7 +198,7 @@ public struct PromptDraft: Equatable, Sendable {
         let effects: [PromptEffect] = voice.isActive ? [.stopVoice(finalize: false)] : []
         if voice.isActive {
             voice = .off
-            text = Self.takeOver(display, edited: value)
+            text = Self.takeOver(display, fieldHad: fieldText ?? display, edited: value)
             volatile = ""
             return effects
         }
@@ -333,20 +340,20 @@ public struct PromptDraft: Equatable, Sendable {
         return head + " " + tail
     }
 
-    /// The first keystroke while the microphone was on. The focused field may still hold an older text than what was
-    /// heard (it does not always take the transcriber's words while it is being edited), so `edited` is that older
-    /// text plus the keystroke. Reading it literally would throw the dictation away; instead the keystroke goes where
-    /// the person saw the caret, at the end of everything heard. Edits that fit the full text are taken as they are:
-    /// typing at its end, one Backspace, or an insertion inside it.
-    public static func takeOver(_ heard: String, edited: String) -> String {
-        if edited.hasPrefix(heard) { return edited }
-        if heard.hasPrefix(edited), edited.count == heard.count - 1 { return edited }
-        var shared = zip(edited, heard).prefix { $0 == $1 }.count
-        let rest = heard.dropFirst(shared)
-        if edited.count > heard.count, !rest.isEmpty, edited.hasSuffix(rest) { return edited }
-        // A space typed after the older text belongs to the keystroke: "Please summarize" + " and" adds " and".
-        while shared > 0, edited[edited.index(edited.startIndex, offsetBy: shared - 1)].isWhitespace { shared -= 1 }
-        return heard + edited.dropFirst(shared)
+    /// The first keystroke while the microphone was on. `fieldHad` is what the focused field really held before it:
+    /// the field does not always take the transcriber's words while it is being edited. When it held the whole
+    /// dictation, the edit is taken as it is (typing, Backspace, a selection replaced, a paste). When it was behind,
+    /// the edit was made on older text the person could not see; what it added goes at the end of everything heard,
+    /// where they saw the caret, and what it removed from that older text is ignored.
+    public static func takeOver(_ heard: String, fieldHad: String, edited: String) -> String {
+        if fieldHad == heard { return edited }
+        let old = Array(fieldHad), new = Array(edited)
+        var prefix = 0
+        while prefix < old.count, prefix < new.count, old[prefix] == new[prefix] { prefix += 1 }
+        var suffix = 0
+        while suffix < old.count - prefix, suffix < new.count - prefix,
+              old[old.count - 1 - suffix] == new[new.count - 1 - suffix] { suffix += 1 }
+        return heard + String(new[prefix..<(new.count - suffix)])
     }
 
     private mutating func keepVolatile() {

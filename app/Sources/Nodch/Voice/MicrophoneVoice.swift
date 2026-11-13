@@ -43,7 +43,8 @@ final class MicrophoneVoice: VoiceSource {
     private var reading: Task<Void, Never>?
     private var meter: LevelMeter?
     private var meterTimer: Timer?
-    private var downloading = false
+    /// Speech models on their way, by locale: one request each, also when the language changes mid-download.
+    private var downloading: Set<String> = []
     /// How long Return waits for the last words before sending what it has.
     static let finalizeLimit: Duration = .milliseconds(1500)
 
@@ -54,19 +55,20 @@ final class MicrophoneVoice: VoiceSource {
         Task { [weak self] in
             guard let locale = await SpeechSupport.locale() else { return }
             if case .missing(let request) = await SpeechSupport.assets(for: SpeechSupport.transcriber(locale)) {
-                self?.download(request)
+                self?.download(request, for: locale)
             }
         }
     }
 
     /// Apple's free download, once at a time. Often the model is on the Mac already and only needs reserving for
     /// nodch, which takes a moment; a real download goes on in the background while the prompt works with the keyboard.
-    private func download(_ request: AssetInstallationRequest?) {
-        guard let request, !downloading else { return }
-        downloading = true
+    private func download(_ request: AssetInstallationRequest?, for locale: Locale) {
+        let id = locale.identifier(.bcp47)
+        guard let request, !downloading.contains(id) else { return }
+        downloading.insert(id)
         Task { [weak self] in
             try? await request.downloadAndInstall()
-            self?.downloading = false
+            self?.downloading.remove(id)
         }
     }
 
@@ -149,7 +151,7 @@ final class MicrophoneVoice: VoiceSource {
         case .installed: break
         case .unsupported: return fail(.speechUnavailable)
         case .missing(let request):
-            download(request)
+            download(request, for: locale)
             var installed = false
             for _ in 0..<12 where !installed {
                 try? await Task.sleep(for: .milliseconds(250))
