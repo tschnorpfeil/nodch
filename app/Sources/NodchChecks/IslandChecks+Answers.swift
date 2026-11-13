@@ -15,8 +15,19 @@ extension IslandChecks {
         check(P.tone(asks) == .needsYou && P.wing(asks, tone: .needsYou, hovering: false)?.showsChevron == true,
               "answers: a question waits for the person like an approval")
 
-        // A question opens the card by itself, without the keyboard, and closes it once answered.
+        // Only a new question takes focus, whether the card was already open or not.
         check(P.reaction(from: .rest, to: asks, open: nil) == .reveal, "answers: Nod's question reveals the card")
+        check(P.newQuestion(from: .rest, to: asks), "answers: a new question requests focus")
+        check(!P.newQuestion(from: asks, to: asks), "answers: repeated question updates leave focus alone")
+        let other = IslandState.asks(NodAnswer(id: "q2", text: "Where?", at: now, question: question))
+        check(P.newQuestion(from: asks, to: other), "answers: a different question requests focus")
+        check(!P.newQuestion(from: asks, to: .rest), "answers: leaving a question does not request focus")
+        let ids = question.choices.map(\.id)
+        check(P.nextChoice(nil, choices: ids, down: true) == "c1", "answers: Down starts at the first choice")
+        check(P.nextChoice(nil, choices: ids, down: false) == "c2", "answers: Up starts at the last choice")
+        check(P.nextChoice("c1", choices: ids, down: true) == "c2", "answers: arrows move between choices")
+        check(P.nextChoice("c2", choices: ids, down: true) == "c2", "answers: navigation stops at the end")
+        check(P.nextChoice("missing", choices: [], down: true) == nil, "answers: no choices leaves nothing highlighted")
         check(P.reaction(from: asks, to: asks, open: nil) == .none, "answers: the same question does not reopen a collapsed card")
         check(P.reaction(from: asks, to: .working(WorkActivity(title: nil, step: nil, site: nil, since: now, doing: .model)), open: .approval) == .conceal,
               "answers: an answered question closes the card it opened")

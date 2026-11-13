@@ -247,6 +247,10 @@ struct IslandPromptCard: View {
             }
             .font(IslandStyle.caption).foregroundStyle(IslandStyle.white(IslandStyle.tertiary + 0.05))
             .accessibilityHidden(true)
+        } else if let question = model.asking?.question, !question.choices.isEmpty {
+            Text(question.multiple ? "↑↓ navigate  ·  ↩ select  ·  Send to answer  ·  esc close" : "↑↓ navigate  ·  ↩ answer  ·  esc close")
+                .font(IslandStyle.caption).foregroundStyle(IslandStyle.white(IslandStyle.tertiary))
+                .accessibilityHidden(true)
         } else {
             Text("↩ send  ·  esc close").font(IslandStyle.caption)
                 .foregroundStyle(IslandStyle.white(IslandStyle.tertiary))
@@ -325,6 +329,7 @@ struct IslandAnswer: View {
 
     private func choiceButton(_ choice: NodQuestion.Choice, multiple: Bool) -> some View {
         let ticked = model.picked.contains(choice.id)
+        let highlighted = model.asking?.id == answer.id && model.highlightedChoice == choice.id
         return Button { model.pick(choice) } label: {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 if multiple {
@@ -344,6 +349,8 @@ struct IslandAnswer: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(RoundedRectangle(cornerRadius: IslandStyle.wellRadius, style: .continuous)
                 .fill(ticked ? IslandStyle.accent.opacity(0.22) : IslandStyle.white(0.1)))
+            .overlay(RoundedRectangle(cornerRadius: IslandStyle.wellRadius, style: .continuous)
+                .stroke(highlighted ? IslandStyle.accent : .clear, lineWidth: 2))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

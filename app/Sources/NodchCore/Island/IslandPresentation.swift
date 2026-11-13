@@ -90,6 +90,19 @@ public enum IslandPresentation {
         }
     }
 
+    /// Repeated updates for the same question must not take the keyboard again.
+    public static func newQuestion(from old: IslandState, to new: IslandState) -> Bool {
+        guard case .asks(let answer) = new else { return false }
+        return waitingID(old) != "question:" + answer.id
+    }
+
+    /// Move a keyboard highlight without changing any selected answers.
+    public static func nextChoice(_ current: String?, choices: [String], down: Bool) -> String? {
+        guard !choices.isEmpty else { return nil }
+        guard let current, let index = choices.firstIndex(of: current) else { return down ? choices.first : choices.last }
+        return choices[min(max(index + (down ? 1 : -1), 0), choices.count - 1)]
+    }
+
     /// The short name of the state, for the card's header and VoiceOver.
     public static func heading(_ tone: IslandTone) -> String {
         switch tone {
