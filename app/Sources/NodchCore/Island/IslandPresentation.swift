@@ -147,6 +147,10 @@ public enum IslandPresentation {
 
     public static func takesKey(_ cause: OpenCause) -> Bool { cause != .approval }
 
+    /// A new question puts the keyboard in the field only on a card the person opened. On a card that opened by
+    /// itself (or a closed one) it waits for their click or shortcut, like an approval.
+    public static func questionTakesKey(open: OpenCause?) -> Bool { open.map(takesKey) ?? false }
+
     /// A card the person opened closes on a click elsewhere. One that opened by itself for an approval stays until it
     /// is answered or collapsed: a click in another app is not a decision about it.
     public static func closesOnOutsideClick(_ cause: OpenCause) -> Bool { cause != .approval }

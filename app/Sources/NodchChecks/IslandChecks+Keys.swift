@@ -24,5 +24,11 @@ extension IslandChecks {
         check(P.arrowsMoveChoices(field: "", choices: 3), "keys: arrows move between choices while the field is empty")
         check(!P.arrowsMoveChoices(field: "und vormittags", choices: 3), "keys: arrows stay in a field with words")
         check(!P.arrowsMoveChoices(field: "", choices: 0), "keys: arrows without choices stay in the field")
+
+        // A question takes the keyboard only on a card the person opened.
+        check(P.questionTakesKey(open: .hotkey) && P.questionTakesKey(open: .click) && P.questionTakesKey(open: .drop),
+              "keys: a question on a card the person opened takes the keyboard")
+        check(!P.questionTakesKey(open: .approval), "keys: a question on a card that opened by itself leaves the keyboard alone")
+        check(!P.questionTakesKey(open: nil), "keys: a question on a closed card leaves the keyboard alone")
     }
 }

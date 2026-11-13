@@ -122,11 +122,13 @@ final class IslandController {
         case .none: break
         }
         if newQuestion, model.isOpen {
-            let front = NSWorkspace.shared.frontmostApplication
-            if front?.processIdentifier != ProcessInfo.processInfo.processIdentifier { previousApp = front }
             model.showsPrompt = true
-            presenter.open(key: true)
-            model.focusToken += 1
+            if IslandPresentation.questionTakesKey(open: openCause) {
+                let front = NSWorkspace.shared.frontmostApplication
+                if front?.processIdentifier != ProcessInfo.processInfo.processIdentifier { previousApp = front }
+                presenter.open(key: true)
+                model.focusToken += 1
+            }
         }
         refresh()
     }
