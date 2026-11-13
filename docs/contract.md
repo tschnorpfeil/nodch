@@ -1,7 +1,7 @@
 # Real Nod client contract
 
 Run from the nodch repository with Swift 6.4 command-line tools, Node >=24.21,
-Docker (on this machine: the already running `colima-spf` context), curl and git:
+Docker, curl and git:
 
 ```sh
 scripts/contract.sh
