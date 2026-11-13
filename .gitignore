@@ -1,0 +1,7 @@
+.build/
+dist/
+.DS_Store
+node_modules/
+.swiftpm/
+*.xcodeproj
+/snapshots/
