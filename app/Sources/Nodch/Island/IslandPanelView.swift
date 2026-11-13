@@ -344,7 +344,6 @@ struct IslandAnswer: View {
                         }
                         .buttonStyle(IslandButtonStyle(prominent: true))
                         .disabled(model.picked.isEmpty || model.draft.sending || model.answerGuarded)
-                        .opacity(model.answerGuarded ? 0.55 : 1)
                         .accessibilityHint("Option-Return, when the field is empty")
                     }
                 }
