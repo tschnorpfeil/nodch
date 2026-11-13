@@ -102,6 +102,15 @@ import Foundation
         }
     }
 
+    /// After a change: a fetch already in flight predates it, so wait that out and then fetch again.
+    private func refreshAfterChange() {
+        let older = fetchTask
+        Task { [weak self] in
+            if let older { _ = try? await older.value }
+            self?.requestRefresh()
+        }
+    }
+
     private func apply(_ state: NodState) {
         store.state = mapper.map(state)
         if case .done = store.state {
@@ -122,12 +131,12 @@ import Foundation
     }
 
     public func send(prompt: String) async throws {
-        do { _ = try await client.send(prompt: prompt); requestRefresh() }
+        do { _ = try await client.send(prompt: prompt); refreshAfterChange() }
         catch { handleActionError(error); throw error }
     }
 
     public func answer(approval: PendingApproval, approved: Bool) async throws {
-        do { _ = try await client.answer(approval: approval, approved: approved); requestRefresh() }
+        do { _ = try await client.answer(approval: approval, approved: approved); refreshAfterChange() }
         catch let error as NodClientError {
             if case .conflict = error {
                 // Wait out any older snapshot, then fetch after the conflict. Never repeat the POST.
@@ -139,7 +148,7 @@ import Foundation
     }
 
     public func stop() async throws {
-        do { try await client.stop(); requestRefresh() }
+        do { try await client.stop(); refreshAfterChange() }
         catch { handleActionError(error); throw error }
     }
 

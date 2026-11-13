@@ -56,6 +56,24 @@ import NodchCore
             check(mapper.map(finished, now: now.addingTimeInterval(1)) == .done(summary: "Finished"), "refresh does not extend completion deadline")
             check(mapper.map(finished, now: now.addingTimeInterval(3)) == .rest, "done expires to rest")
             check(mapper.map(try .decode(fixture(status: "failed"))) == .failed(message: "Model failed"), "failed turn exposes server error")
+            var cold = NodStateMapper()
+            check(cold.map(try .decode(fixture(status: "failed"))) == .rest, "a failure from before connecting stays quiet")
+            var proactive = NodStateMapper()
+            _ = proactive.map(try .decode(fixture(status: "running")))
+            let eventFailure = String(decoding: fixture(status: "failed"), as: UTF8.self).replacingOccurrences(of: "\"source\":\"user\"", with: "\"source\":\"event\"")
+            check(proactive.map(try .decode(Data(eventFailure.utf8))) == .rest, "a failed proactive turn stays quiet")
+            var stopped = NodStateMapper()
+            _ = stopped.map(try .decode(fixture(status: "running")))
+            check(stopped.map(try .decode(fixture(status: "cancelled"))) == .rest, "a turn cancelled by Stop returns to rest")
+            var both = try JSONSerialization.jsonObject(with: fixture(status: "running", activity: true)) as! [String: Any]
+            var items = both["activity"] as! [[String: Any]]
+            var background = items[0]; background["background"] = true; background["title"] = "Weekly digest"
+            var own = items[0]; own["since"] = "2026-11-13T08:05:00.000Z"; own["step"] = NSNull(); own["site"] = NSNull(); own["tool"] = "Running a command"
+            items = [background, own]; both["activity"] = items
+            var mixed = NodStateMapper()
+            if case .working(let work) = mixed.map(try .decode(JSONSerialization.data(withJSONObject: both))) {
+                check(work.title == "Checking" && work.step == "Running a command", "own turn wins over older background work; tool label fills the step")
+            } else { check(false, "activity with background work maps") }
             for status in ["working", "done", "declined", "expired", "uncertain"] {
                 var fresh = NodStateMapper()
                 check(fresh.map(try .decode(fixture(approval: status))) == .rest, "approval state \(status) is not pending")

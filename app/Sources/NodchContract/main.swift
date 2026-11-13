@@ -38,7 +38,18 @@ import NodchCore
     do { try await session.answer(approval: approval, approved: true); throw NodClientError.configuration("Duplicate approval succeeded") }
     catch NodClientError.conflict { print("PASS duplicate approval -> 409 (no retry)") }
     try await session.stop()
-    print("PASS stop -> accepted")
+    let settled = Date().addingTimeInterval(20)
+    while Date() < settled {
+        switch session.store.state {
+        case .working, .needsYou: try await Task.sleep(for: .milliseconds(50)); continue
+        default: break
+        }
+        break
+    }
+    switch session.store.state {
+    case .working, .needsYou: throw NodClientError.configuration("Still busy after stop: \(session.store.state)")
+    default: print("PASS stop -> accepted, island settles (\(session.store.state))")
+    }
 }
 
 do { try await run() }

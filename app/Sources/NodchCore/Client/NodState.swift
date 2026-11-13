@@ -23,6 +23,7 @@ public struct NodState: Decodable, Sendable {
     public struct Turn: Decodable, Sendable {
         public let id: String
         public let status: String
+        public let source: String?
         public let createdAt: String
         public let finishedAt: String?
         public let error: String?
@@ -35,6 +36,8 @@ public struct NodState: Decodable, Sendable {
         public let site: String?
         public let since: String
         public let doing: String
+        /// Nod's label for a tool without a site, e.g. "Running a command".
+        public let tool: String?
         public let background: Bool?
     }
     public let threadId: String
@@ -49,6 +52,8 @@ public struct NodStateMapper: Sendable {
     private var previous: NodState?
     private var doneUntil: Date?
     private var doneSummary: String?
+    /// A turn seen failing while connected; failures from before connecting or from proactive turns stay quiet.
+    private var failedTurn: String?
     public var doneDuration: TimeInterval
 
     public init(doneDuration: TimeInterval = 3) { self.doneDuration = doneDuration }
@@ -64,9 +69,10 @@ public struct NodStateMapper: Sendable {
                                    question: message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : message.text)
         }
         if let first = approvals.first { doneUntil = nil; return .needsYou(first, more: approvals.count - 1) }
-        if let activity = state.activity?.first {
+        // Nod sorts activity by start; the person's own turn wins over older background work.
+        if let activity = state.activity?.first(where: { $0.background != true }) ?? state.activity?.first {
             doneUntil = nil
-            return .working(WorkActivity(title: activity.title, step: activity.step, site: activity.site,
+            return .working(WorkActivity(title: activity.title, step: activity.step ?? activity.tool, site: activity.site,
                                          since: Self.date(activity.since) ?? now,
                                          doing: WorkActivity.Doing(rawValue: activity.doing) ?? .model))
         }
@@ -76,7 +82,11 @@ public struct NodStateMapper: Sendable {
             return .working(WorkActivity(title: nil, step: nil, site: nil, since: Self.date(running.createdAt) ?? now,
                                          doing: running.status == "queued" ? .queued : .model))
         }
-        if let latest, latest.status == "failed" {
+        if let latest, latest.status == "failed", latest.source != "event", let previous,
+           previous.turns.first(where: { $0.id == latest.id })?.status != "failed" {
+            failedTurn = latest.id
+        }
+        if let latest, latest.status == "failed", failedTurn == latest.id {
             doneUntil = nil
             return .failed(message: latest.error ?? "Nod could not finish this turn.")
         }
