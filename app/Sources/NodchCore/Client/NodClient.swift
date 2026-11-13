@@ -60,8 +60,10 @@ public final class NodClient: Sendable {
                                              attachmentIds: attachments.map(\.id)))
     }
 
-    public func upload(file: URL) async throws -> NodAttachment {
-        guard file.isFileURL else { throw NodClientError.invalidInput("Choose a local file to upload.") }
+    public func upload(file dropped: URL) async throws -> NodAttachment {
+        guard dropped.isFileURL else { throw NodClientError.invalidInput("Choose a local file to upload.") }
+        // A symlink uploads the file it points to, under the name the person dropped.
+        let file = dropped.resolvingSymlinksInPath()
         let scoped = file.startAccessingSecurityScopedResource()
         defer { if scoped { file.stopAccessingSecurityScopedResource() } }
         // Nod 915e4f1: src/shared/files.ts and src/server/artifacts.ts.
@@ -71,20 +73,22 @@ public final class NodClient: Sendable {
         do {
             let values = try file.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey])
             guard values.isRegularFile == true else {
-                throw NodClientError.invalidInput("Choose a regular file to upload; folders are not supported.")
+                throw NodClientError.invalidInput("Choose a file to upload; folders and packages are not supported.")
             }
             guard let size = values.fileSize, size > 0, size <= limit else { throw sizeError }
             let handle = try FileHandle(forReadingFrom: file)
             defer { try? handle.close() }
-            // Bound the read as well, in case the file grows after the size check.
+            // Bound the read as well, in case the file grows after the size check. The whole file is held in memory
+            // (about twice, with the multipart body): fine for Nod's 90 MiB cap.
             bytes = try handle.read(upToCount: limit + 1) ?? Data()
             guard !bytes.isEmpty, bytes.count <= limit else { throw sizeError }
         } catch let error as NodClientError { throw error }
         catch { throw NodClientError.invalidInput("Cannot read the selected file. \(error.localizedDescription)") }
 
         let boundary = "nodch-\(UUID().uuidString)"
-        let name = file.lastPathComponent
-            .replacingOccurrences(of: "%", with: "%25")
+        // Nod's multipart parser does not percent-decode, so only what would break the header is escaped, as browsers
+        // do; a backslash would read as a path separator there.
+        let name = dropped.lastPathComponent
             .replacingOccurrences(of: "\"", with: "%22")
             .replacingOccurrences(of: "\\", with: "%5C")
             .replacingOccurrences(of: "\r", with: "%0D")

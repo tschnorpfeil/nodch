@@ -121,7 +121,7 @@ Sources in the pinned Nod checkout:
 - `src/shared/files.ts`, `src/server/app.ts` and `artifacts.ts`: POST `/api/uploads`
   accepts one multipart field named `file`, limited to **90 MiB** (94,371,840
   bytes), and returns an Artifact (`id`, `name`, `mimeType`, `size`, `url`). Files
-  must contain at least one byte. The client rejects non-regular, unreadable,
+  must contain at least one byte. The client follows symlinks, rejects folders, packages, unreadable,
   empty and oversized files before any request, infers MIME with the extension's
   UTType (falling back to `application/octet-stream`), and uses the normal auth.
   Uploads expire after 24 hours; this client does not renew them or retry uploads.

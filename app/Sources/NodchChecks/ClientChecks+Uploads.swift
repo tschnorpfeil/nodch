@@ -42,6 +42,20 @@ extension ClientChecks {
         check(contentType.hasPrefix("multipart/form-data; boundary=") && !boundary.isEmpty && requestBody(request) == Data(expected.utf8), "upload multipart uses matching boundary, file field, filename, UTType MIME and CRLF framing")
         check(request.httpMethod == "POST" && request.url?.path == "/api/uploads" && request.value(forHTTPHeaderField: "Authorization") == "Bearer fixture" && ClientStub.requests.count == 1, "upload uses standard bearer auth and one POST")
 
+        // Nod does not percent-decode the multipart filename: "%" goes as is; a quote must not end the header value.
+        let odd = directory.appendingPathComponent("100% \"final\".txt")
+        try Data("hello".utf8).write(to: odd)
+        ClientStub.configure { _ in .init(body: artifact) }
+        _ = try await client.upload(file: odd)
+        check(requestBody(ClientStub.requests[0]).range(of: Data("filename=\"100% %22final%22.txt\"".utf8)) != nil, "upload filename keeps % and escapes quotes")
+
+        let link = directory.appendingPathComponent("link.txt")
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: text)
+        ClientStub.configure { _ in .init(body: artifact) }
+        _ = try await client.upload(file: link)
+        let linkBody = requestBody(ClientStub.requests[0])
+        check(linkBody.range(of: Data("filename=\"link.txt\"".utf8)) != nil && linkBody.range(of: Data("\r\n\r\nhello\r\n".utf8)) != nil, "a symlink uploads its target under the dropped name")
+
         let unknown = directory.appendingPathComponent("binary.nodch-unknown-extension")
         let binary = Data([0, 255, 13, 10, 42])
         try binary.write(to: unknown)
@@ -68,6 +82,8 @@ extension ClientChecks {
         let sendRequest = ClientStub.requests.first { $0.httpMethod == "POST" }!
         let json = try JSONSerialization.jsonObject(with: requestBody(sendRequest)) as! [String: Any]
         check(sendRequest.url?.path == "/api/messages" && json["text"] as? String == "with files" && json["attachmentIds"] as? [String] == [id, second.id], "session send forwards text and attachmentIds in order")
+        let sentID = json["clientMessageId"] as? String ?? ""
+        check(UUID(uuidString: sentID) != nil && sentID == sentID.lowercased(), "send uses a lowercase client message ID")
         _ = try await client.send(prompt: "", attachments: [uploaded])
         let attachmentOnly = try JSONSerialization.jsonObject(with: requestBody(ClientStub.requests.last!)) as! [String: Any]
         check(attachmentOnly["text"] as? String == "" && attachmentOnly["attachmentIds"] as? [String] == [id], "attachment-only message is sent with empty text")
