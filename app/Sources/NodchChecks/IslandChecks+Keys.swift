@@ -36,6 +36,11 @@ extension IslandChecks {
         check(P.hotkey(open: true, prompt: false, key: true, approvalCard: true) == .prompt,
               "keys: pressed again, the shortcut brings the prompt and the approval waits in the wing")
 
+        // ⌘Return opens Nod from every card, also over a prompt with words or an approval.
+        let everyCard: [P.CardOffers] = [.init(), .init(approval: true), .init(stop: true), .init(picks: true)]
+        check(everyCard.allSatisfy { P.keyAction(.returnKey, .command, offers: $0) == .openNod }, "keys: ⌘Return opens Nod on every card")
+        check(P.keyAction(.delete, .command, offers: .init(approval: true)) == nil, "keys: ⌘⌫ is not Decline")
+
         // A multiple-choice question: Return ticks, ⌥Return sends the ticks while the field is empty.
         check(P.keyAction(.returnKey, .option, offers: .init(picks: true)) == .sendPicks, "keys: ⌥Return sends the ticked choices")
         check(P.keyAction(.returnKey, .option, offers: .init(picks: false)) == nil, "keys: ⌥Return without ticks (or with words) stays in the field")

@@ -885,10 +885,15 @@ struct IslandOpenButton: View {
             HStack(spacing: 5) {
                 Text("Open Nod")
                 Image(systemName: "arrow.up.right").font(.system(size: 9, weight: .bold)).opacity(0.8)
+                // The key in the hint style, inside the button: the card does not grow for it.
+                Text("⌘↩").font(IslandStyle.caption).foregroundStyle(IslandStyle.white(IslandStyle.tertiary))
+                    .accessibilityHidden(true)
             }
         }
         .buttonStyle(IslandButtonStyle(prominent: prominent))
+        .help("Open Nod (⌘↩)")
         .accessibilityLabel("Open Nod")
+        .accessibilityHint("Command-Return")
     }
 }
 

@@ -197,13 +197,14 @@ public enum IslandPresentation {
         }
     }
 
-    public enum KeyAction: Equatable, Sendable { case approve, decline, stop, sendPicks }
+    public enum KeyAction: Equatable, Sendable { case approve, decline, stop, sendPicks, openNod }
 
-    /// ⌥Return approves and ⌥⌫ declines on the approval card; ⌥Return sends ticked choices (like their Send button);
+    /// ⌘Return does what "Open Nod" does, on every card. ⌥Return approves and ⌥⌫ declines on the approval card; ⌥Return sends ticked choices (like their Send button);
     /// ⌘. stops a running turn. Plain Return never approves and keeps ticking choices.
     /// The app asks only while the island has the keyboard, and Approve and Decline still wait out `answerGuard`.
     public static func keyAction(_ key: CardKey, _ modifier: KeyModifier, offers: CardOffers) -> KeyAction? {
         switch (key, modifier) {
+        case (.returnKey, .command): .openNod
         case (.returnKey, .option): offers.approval ? .approve : offers.picks ? .sendPicks : nil
         case (.delete, .option): offers.approval ? .decline : nil
         case (.period, .command): offers.stop ? .stop : nil

@@ -263,14 +263,20 @@ final class IslandController {
         }
     }
 
-    /// ⌥Return, ⌥⌫ or ⌘. on the card that has the keyboard: the same as a click on its button.
+    /// ⌘Return, ⌥Return, ⌥⌫ or ⌘. on the card that has the keyboard: the same as a click on its button.
     private func cardKey(_ key: IslandPresentation.CardKey, _ modifier: IslandPresentation.KeyModifier) -> Bool {
-        guard let action = IslandPresentation.keyAction(key, modifier, offers: model.cardOffers) else { return false }
+        guard model.isOpen, let action = IslandPresentation.keyAction(key, modifier, offers: model.cardOffers) else { return false }
         switch action {
         case .approve: model.answer(approved: true)
         case .decline: model.answer(approved: false)
         case .stop: model.stop()
         case .sendPicks: model.sendPicks()
+        case .openNod:
+            // The "Open Nod" button's path. Nod comes to the front, so the keyboard goes there, not back to the app
+            // before; a draft stays for next time, neither sent nor discarded.
+            model.openNod()
+            previousApp = nil
+            presenter.close()
         }
         return true
     }
