@@ -131,14 +131,13 @@ import Foundation
     }
 
     public func send(prompt: String, attachments: [NodAttachment]) async throws {
-        // Seam stub: P3 sends `attachmentIds`.
-        do { _ = try await client.send(prompt: prompt); refreshAfterChange() }
+        do { _ = try await client.send(prompt: prompt, attachments: attachments); refreshAfterChange() }
         catch { handleActionError(error); throw error }
     }
 
     public func upload(file: URL) async throws -> NodAttachment {
-        // Seam stub: P3 posts to /api/uploads.
-        throw NodClientError.invalidResponse
+        do { return try await client.upload(file: file) }
+        catch { handleActionError(error); throw error }
     }
 
     public func answer(approval: PendingApproval, approved: Bool) async throws {

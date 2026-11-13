@@ -5,7 +5,7 @@ import NodchCore
     static func run() async {
         parserChecks()
         mappingChecks()
-        do { try configurationChecks(); try await transportChecks() }
+        do { try configurationChecks(); try await transportChecks(); try await uploadChecks() }
         catch { check(false, "client checks: \(error)") }
     }
 
@@ -88,7 +88,8 @@ import NodchCore
     }
 
     static func configurationChecks() throws {
-        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("nodch-contract/checks-\(UUID().uuidString)")
+        let directory = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            .appendingPathComponent(".build/client-checks-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directory) }
         let key = String(repeating: "a", count: 43)

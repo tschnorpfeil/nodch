@@ -2,7 +2,7 @@ import Foundation
 import Synchronization
 import NodchCore
 
-private final class ClientStub: URLProtocol, @unchecked Sendable {
+final class ClientStub: URLProtocol, @unchecked Sendable {
     struct Reply: Sendable {
         var status = 200
         var mime = "application/json"

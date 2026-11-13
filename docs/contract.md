@@ -29,7 +29,9 @@ rows, server source, adapters or approval services are replaced by the fixture.
 
 - Anonymous state request returns 401; access-key cookie returns 200.
 - SSE connects and fetches the initial state.
-- Sending a prompt is accepted, and SSE plus state exposes `.needsYou`.
+- Uploading a small text file returns its Artifact; sending its `attachmentIds`
+  with empty text is accepted. GET state retains the attachment on that message.
+- SSE plus state exposes `.needsYou` for the stub's approval scenario.
 - Explicit approval is accepted; a second explicit answer returns 409.
 - Stop is accepted; the pinned Nod checkout remains clean.
 
@@ -116,6 +118,20 @@ Sources in the pinned Nod checkout:
   client accepts `working` as well. Heartbeats are comments every 15 seconds.
 - `src/shared/contracts.ts`: pending message approvals take precedence over work
   activity; historical successful turns do not flash done on initial connection.
+- `src/shared/files.ts`, `src/server/app.ts` and `artifacts.ts`: POST `/api/uploads`
+  accepts one multipart field named `file`, limited to **90 MiB** (94,371,840
+  bytes), and returns an Artifact (`id`, `name`, `mimeType`, `size`, `url`). Files
+  must contain at least one byte. The client rejects non-regular, unreadable,
+  empty and oversized files before any request, infers MIME with the extension's
+  UTType (falling back to `application/octet-stream`), and uses the normal auth.
+  Uploads expire after 24 hours; this client does not renew them or retry uploads.
+- `src/server/audio-messages.ts` (`messageInput`), `app.ts:491` and
+  `thread.ts` (`submitUserMessage`): a normal text message may have empty text
+  when `attachmentIds` contains uploaded UUIDs. Whitespace becomes empty text;
+  the route requires text or attachments. The client rejects blank text without
+  attachments locally. Explicit approval answers still require nonempty text and
+  no attachments. The real contract sends an attachment-only user message through
+  the normal `/api/messages` route; no audio route is used.
 - `docs/src/content/docs/connect/local-models.mdx` and `src/providers/pi/`: the
   compatible provider uses `/v1/models` and OpenAI chat completions, including
   streamed tool calls. `NOD_TRUST_MODEL=selected` keeps all model calls on the
@@ -125,93 +141,45 @@ Deterministic, network-free checks are part of `swift run --package-path app
 NodchChecks`. A `URLProtocol` fixture covers SSE reconnects, event-triggered
 refreshes, coalescing, authentication failures, mutation bodies and no retries.
 
-## Acceptance output (2026-11-13)
+## Latest acceptance output (2026-11-13)
 
-All three commands below exited 0 in this checkout with Swift 6.4. The command-line
-toolchain emitted linker search-path warnings; they did not prevent linking.
-
-`swift build --package-path app` (last line):
+`swift build --package-path app` exited 0:
 
 ```text
-Build complete! (2,00 Sek.)
+Build complete! (4,12 Sek.)
 ```
 
-`swift run --package-path app NodchChecks` (complete assertion output):
+`swift run --package-path app NodchChecks` exited 0, including the new
+multipart framing, MIME fallback, bearer/cookie auth, Artifact mapping,
+attachmentIds, local file validation and upload error/no-retry assertions:
 
 ```text
-Build complete! (1,35 Sek.)
-ok   package links
-ok   store starts offline
-ok   SSE partial UTF-8, CR/LF/CRLF, BOM and heartbeats
-ok   SSE multiline data and event/id fields
-ok   SSE empty data dispatches; event without data resets
-ok   SSE partial trailing event is not dispatched
-ok   SSE multiple events in one chunk
-ok   state ignores historical completion on initial connect
-ok   state maps real Activity fields and fractional timestamp
-ok   pending approval wins over running activity
-ok   state counts additional pending approvals
-ok   newly completed turn shows done
-ok   refresh does not extend completion deadline
-ok   done expires to rest
-ok   failed turn exposes server error
-ok   approval state working is not pending
-ok   approval state done is not pending
-ok   approval state declined is not pending
-ok   approval state expired is not pending
-ok   approval state uncertain is not pending
-ok   queued turn maps without activity
-ok   thread change does not announce old completion
-ok   access-key file builds Nod port cookie; default port is 4310
-ok   bearer takes precedence over access-key file and preserves host
-ok   openNod paths stay on configured server
-ok   invalid configuration rejected
-ok   missing access-key reports credentials
-ok   409 approval throws clear conflict
-ok   409 refreshes state without retrying approval
-ok   approval JSON uses message ID, approval ID, explicit decision and client UUID
-ok   SSE activity triggers state refetch and mapping
-ok   SSE working triggers state refetch and mapping
-ok   SSE refresh triggers state refetch and mapping
-ok   SSE delta does not fetch chat content
-ok   401 maps to offline credentials
-ok   network failure never retries send
-ok   unreachable maps to offline
-ok   network failure never retries approval
-ok   HTTP failure never retries send
-ok   invalid state JSON has a typed error
-ok   session publishes completion
-ok   session done timer expires without another server event
-ok   every SSE reconnect refetches state without a refresh event
-ok   disconnect cancels reconnects
-ok   SSE reads Nod JSON event types rather than relying on event field
-ok   concurrent state refreshes coalesce
+ok   non-2xx upload is readable and never retried
+ok   upload network failure is never retried
+ok   invalid Artifact JSON has a typed error
 All checks passed.
 ```
 
-`scripts/contract.sh` (complete assertion output):
+`scripts/contract.sh` installed dependencies and started the real pinned Nod,
+then exited 1 at the new attachment persistence assertion:
 
 ```text
 PASS without credentials -> 401
 PASS with credentials -> 200
 PASS SSE connects and loads initial state
-PASS send prompt -> accepted
-PASS SSE + state -> IslandState.needsYou
-PASS approve -> accepted
-PASS duplicate approval -> 409 (no retry)
-PASS stop -> accepted
-PASS Nod pinned revision -> 915e4f1f0f5ee6e3af422bcc2814dc4c6a851cc1
-PASS Nod git status --porcelain -> clean
+PASS upload text file -> Artifact with id, name, MIME and size
+PASS send attachment without text -> accepted
+PASS GET state with uploaded attachment -> 200
+Contract failed: GET state -> sent message carries uploaded attachment
 ```
 
-`git -C "$TMPDIR/nodch-contract/nod" status`:
+This run does **not** establish attachment persistence or the later approval/stop
+assertions. Investigation stopped at the requested failure gate; the exact
+mismatching message field has not been diagnosed. No rerun was attempted.
+The fixture trap removed its containers and processes: a subsequent Docker
+container listing for `nodch-contract` and listener check for 14310/14311 were
+both empty. The cached Nod checkout remained clean.
 
-```text
-HEAD detached at 915e4f1f
-nothing to commit, working tree clean
-```
-
-The documented `scripts/contract.sh --serve` mode was also started: the Nod page
-returned HTTP 200. Ctrl-C exited 130, removed both fixture containers and left
-neither server nor stub listening on ports 14310/14311. UI rendering and the live
-notch screenshot belong to the separate island integration and were not tested.
+The command-line toolchain emitted linker search-path warnings; they did not
+prevent the build or deterministic checks from passing. UI rendering was not
+tested in this client-only task.
