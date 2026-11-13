@@ -238,9 +238,9 @@ import Observation
             do {
                 try await actions.answer(question: asked, choices: choices, text: text)
                 if asking?.id == asked.id { picked = [] }
-                if text.isEmpty { draft.answeredKeepingText(token: token) } else if draft.sent(token: token) { onSent() }
+                finishSend(token: token, questionID: asked.id, keepingText: text.isEmpty)
             } catch {
-                draft.sendFailed(Self.describe(error), token: token)
+                failSend(error, token: token, questionID: asked.id)
             }
         }
     }
@@ -259,11 +259,28 @@ import Observation
                 } else {
                     try await actions.send(prompt: prompt, attachments: attachments)
                 }
-                if draft.sent(token: token) { onSent() }
+                finishSend(token: token, questionID: asked?.id)
             } catch {
-                draft.sendFailed(Self.describe(error), token: token)
+                failSend(error, token: token, questionID: asked?.id)
             }
         }
+    }
+
+    /// A later question can arrive before Nod acknowledges this send. Complete the old draft without closing it.
+    private func finishSend(token: Int, questionID: String?, keepingText: Bool = false) {
+        guard draft.sending, draft.sendToken == token else { return }
+        if keepingText { draft.answeredKeepingText(token: token) } else { _ = draft.sent(token: token) }
+        if let current = asking, current.id != questionID {
+            if isOpen { focusToken += 1 }
+        } else if !keepingText {
+            onSent()
+        }
+    }
+
+    private func failSend(_ error: Error, token: Int, questionID: String?) {
+        guard draft.sending, draft.sendToken == token else { return }
+        draft.sendFailed(Self.describe(error), token: token)
+        if isOpen, let current = asking, current.id != questionID { focusToken += 1 }
     }
 
     func openNod(path: String = "/") {
