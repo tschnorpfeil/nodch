@@ -11,7 +11,8 @@ git -C "$nod" checkout --detach "$revision"
 (cd "$nod" && CI=true npm_config_cache="$cache/npm" npx -y pnpm@10.34.5 install --frozen-lockfile --store-dir "$cache/pnpm-store")
 run=$(mktemp -d "$cache/run.XXXXXX")
 pg="nodch-contract-pg-$$"
-workspace="nodch-contract-workspace-$$"
+# Nod only runs commands in containers named nod-workspace(-*) (src/providers/docker/command.ts).
+workspace="nod-workspace-nodch-contract-$$"
 server_pid=''
 stub_pid=''
 cleanup() {

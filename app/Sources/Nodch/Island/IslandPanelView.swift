@@ -32,11 +32,25 @@ struct IslandPanelView: View {
             .fixedSize(horizontal: false, vertical: true)
             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { onHeight($0) }
         }
+        .overlay { if model.dropZone == .over { dropHighlight(layout) } }
+        .animation(IslandStyle.fade, value: model.dropZone)
         .frame(maxHeight: .infinity, alignment: .top)
         .fontDesign(.rounded)
         .environment(\.colorScheme, .dark)
         .onAppear { if model.showsPrompt { promptFocused = true } }
         .onChange(of: model.focusToken) { if model.showsPrompt { promptFocused = true } }
+    }
+
+    /// Files over the open card: it lights up as one target.
+    private func dropHighlight(_ layout: IslandModel.Layout) -> some View {
+        let shape = RoundedRectangle(cornerRadius: IslandGeometry.cornerRadius - 6, style: .continuous)
+        return shape.fill(IslandStyle.accent.opacity(0.1))
+            .overlay(shape.strokeBorder(IslandStyle.accent.opacity(0.9), lineWidth: 1.5))
+            // At the notch the ring starts just below the menu bar row, clear of the field.
+            .padding(.top, layout.notch ? max(0, layout.rowHeight - 4) : 0)
+            .padding(6)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
     }
 
     private var heading: String {
@@ -101,55 +115,110 @@ struct IslandPanelView: View {
     }
 }
 
-/// The quick prompt: Return sends once, Escape discards. A failed send keeps the text and says why under it.
+/// The quick prompt: Return sends once, Escape discards. Opened with the shortcut it listens, and the words stream
+/// into the field; the first keystroke turns the microphone off and keeps them. Dropped files show as chips under
+/// the field. A failed send keeps the text and says why under it.
 struct IslandPromptCard: View {
     var model: IslandModel
     var focused: FocusState<Bool>.Binding
 
     var body: some View {
-        @Bindable var model = model
+        let draft = model.draft
         VStack(alignment: .leading, spacing: 10) {
             if model.tone != .rest {
                 Text(statusLine).lineLimit(1).truncationMode(.tail)
                 .font(IslandStyle.small).foregroundStyle(IslandStyle.white(IslandStyle.secondary))
                 .accessibilityElement(children: .combine)
             }
-            HStack(spacing: IslandStyle.buttonGap) {
-                TextField("Ask Nod", text: $model.prompt,
-                          prompt: Text("Ask Nod…").foregroundStyle(IslandStyle.white(IslandStyle.secondary)))
-                    .textFieldStyle(.plain)
-                    .font(IslandStyle.body)
-                    .foregroundStyle(IslandStyle.white(IslandStyle.primary))
-                    .focused(focused)
-                    .disabled(model.sending)
-                    .onSubmit { model.submitPrompt() }
-                    .padding(.trailing, 22)
-                    .islandWell()
-                    .overlay(alignment: .trailing) {
-                        Group {
-                            if model.sending {
-                                ProgressView().controlSize(.small).scaleEffect(0.7)
-                            } else {
-                                Image(systemName: "return").font(.system(size: 10, weight: .semibold))
-                                    .foregroundStyle(IslandStyle.white(model.prompt.isEmpty ? IslandStyle.tertiary - 0.1 : IslandStyle.secondary))
-                            }
-                        }
-                        .frame(width: 22).padding(.trailing, 6)
-                        .accessibilityHidden(true)
-                    }
-                    .accessibilityLabel("Ask Nod")
-                    .accessibilityHint("Return sends, Escape discards")
+            HStack(alignment: .top, spacing: IslandStyle.buttonGap) {
+                field(draft)
                 IslandOpenButton(model: model)
             }
-            if let error = model.promptError {
-                IslandErrorLine(text: error)
-            } else {
-                Text("↩ send  ·  esc close").font(IslandStyle.caption)
-                    .foregroundStyle(IslandStyle.white(IslandStyle.tertiary))
-                    .accessibilityHidden(true)
+            if !draft.attachments.isEmpty {
+                IslandChips(model: model, attachments: draft.attachments)
             }
+            footer(draft)
         }
-        .animation(IslandStyle.fade, value: model.promptError)
+        .animation(IslandStyle.fade, value: draft.error)
+        .animation(IslandStyle.fade, value: draft.attachments)
+        .animation(IslandStyle.fade, value: draft.voice)
+    }
+
+    private func field(_ draft: PromptDraft) -> some View {
+        // The transcriber writes `draft` directly; only the person's own edits come through the binding.
+        let text = Binding(get: { model.draft.display }, set: { model.typed($0) })
+        return TextField("Ask Nod", text: text, prompt: Text(placeholder(draft)).foregroundStyle(IslandStyle.white(IslandStyle.secondary)),
+                         axis: .vertical)
+            .lineLimit(1...5)
+            .textFieldStyle(.plain)
+            .font(IslandStyle.body)
+            .foregroundStyle(IslandStyle.white(draft.voice == .listening ? IslandStyle.primary - 0.05 : IslandStyle.primary))
+            .focused(focused)
+            .disabled(draft.sending || draft.voice == .finishing)
+            .onSubmit { model.submitPrompt() }
+            .padding(.vertical, 6)
+            .padding(.trailing, 50)
+            .padding(.horizontal, 10)
+            .frame(minHeight: IslandStyle.controlHeight)
+            .background(RoundedRectangle(cornerRadius: IslandStyle.wellRadius, style: .continuous).fill(IslandStyle.white(0.1)))
+            .overlay(alignment: .topTrailing) {
+                HStack(spacing: 2) {
+                    IslandMicButton(model: model, voice: draft.voice, level: model.voiceLevel)
+                    Group {
+                        if draft.sending || draft.voice == .finishing {
+                            ProgressView().controlSize(.small).scaleEffect(0.7)
+                        } else {
+                            Image(systemName: "return").font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(IslandStyle.white(draft.canSend ? IslandStyle.secondary : IslandStyle.tertiary - 0.1))
+                        }
+                    }
+                    .frame(width: 18, height: IslandStyle.controlHeight)
+                    .accessibilityHidden(true)
+                }
+                .padding(.trailing, 6)
+            }
+            .accessibilityLabel("Ask Nod")
+            .accessibilityHint(draft.voice == .listening ? "Listening. Typing takes over, Return sends, Escape discards"
+                                                        : "Return sends, Escape discards")
+    }
+
+    private func placeholder(_ draft: PromptDraft) -> String {
+        switch draft.voice {
+        case .starting: "Getting the microphone ready…"
+        case .listening: "Listening… or type"
+        default: draft.attachments.isEmpty ? "Ask Nod…" : "Ask about the files…"
+        }
+    }
+
+    /// One quiet line: the error, what the drop left out, why voice is off, or how the keys work.
+    @ViewBuilder private func footer(_ draft: PromptDraft) -> some View {
+        if let error = draft.error {
+            IslandErrorLine(text: error)
+        } else if let notice = draft.notice {
+            footnote(notice, symbol: "info.circle")
+        } else if case .unavailable(let hint) = draft.voice {
+            footnote(hint.text, symbol: "mic.slash")
+        } else if draft.voice == .listening || draft.voice == .starting {
+            HStack(spacing: 6) {
+                IslandListeningDot(active: draft.voice == .listening)
+                Text("Listening  ·  type to take over  ·  ↩ send  ·  esc discard")
+            }
+            .font(IslandStyle.caption).foregroundStyle(IslandStyle.white(IslandStyle.tertiary + 0.05))
+            .accessibilityHidden(true)
+        } else {
+            Text("↩ send  ·  esc close").font(IslandStyle.caption)
+                .foregroundStyle(IslandStyle.white(IslandStyle.tertiary))
+                .accessibilityHidden(true)
+        }
+    }
+
+    private func footnote(_ text: String, symbol: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 5) {
+            Image(systemName: symbol).font(.system(size: 10, weight: .semibold))
+            Text(text).fixedSize(horizontal: false, vertical: true)
+        }
+        .font(IslandStyle.caption).foregroundStyle(IslandStyle.white(IslandStyle.secondary))
+        .accessibilityElement(children: .combine)
     }
 
     private var statusLine: String {
@@ -159,6 +228,159 @@ struct IslandPromptCard: View {
         case .working: "Working: \(model.line)"
         default: model.line
         }
+    }
+}
+
+/// Voice on or off by hand. While it listens a soft ring breathes with the microphone's level.
+struct IslandMicButton: View {
+    var model: IslandModel
+    let voice: VoiceState
+    let level: Float
+
+    var body: some View {
+        let listening = voice == .listening
+        Button { model.toggleVoice() } label: {
+            ZStack {
+                Circle().fill(IslandStyle.accent.opacity(listening ? 0.22 : 0))
+                    .frame(width: 20, height: 20)
+                    .scaleEffect(listening ? 0.8 + CGFloat(level) * 0.45 : 0.6)
+                    .animation(.easeOut(duration: 0.15), value: level)
+                Image(systemName: symbol).font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(color)
+            }
+            .frame(width: 26, height: IslandStyle.controlHeight)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(voice == .finishing || model.draft.sending)
+        .help(listening || voice == .starting ? "Stop listening" : "Dictate")
+        .accessibilityLabel(listening || voice == .starting ? "Stop listening" : "Dictate")
+    }
+
+    private var symbol: String {
+        switch voice {
+        case .listening, .starting, .finishing: "mic.fill"
+        case .unavailable: "mic.slash"
+        case .off: "mic"
+        }
+    }
+
+    private var color: Color {
+        switch voice {
+        case .listening: IslandStyle.accent
+        case .starting, .finishing: IslandStyle.white(IslandStyle.secondary)
+        case .unavailable: IslandStyle.white(IslandStyle.tertiary)
+        case .off: IslandStyle.white(IslandStyle.secondary)
+        }
+    }
+}
+
+/// A small dot that says the microphone is on; it fades slowly in and out, still under Reduce Motion.
+struct IslandListeningDot: View {
+    let active: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: reduceMotion || !active)) { context in
+            let phase = context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1.6) / 1.6
+            let opacity = active ? (reduceMotion ? 1 : 0.7 + 0.3 * cos(phase * 2 * .pi)) : 0.4
+            Circle().fill(active ? IslandStyle.accent : IslandStyle.white(IslandStyle.secondary))
+                .frame(width: 6, height: 6)
+                .opacity(opacity)
+        }
+        .frame(width: 6, height: 6)
+    }
+}
+
+/// The dropped files under the field: uploading, ready or failed, each with its own ×. A failed one says why.
+struct IslandChips: View {
+    var model: IslandModel
+    let attachments: [PromptAttachment]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            IslandFlow(spacing: 6) {
+                ForEach(attachments) { chip($0) }
+            }
+            ForEach(attachments.filter { if case .failed = $0.status { true } else { false } }) { attachment in
+                if case .failed(let reason) = attachment.status {
+                    IslandErrorLine(text: "\(attachment.name): \(reason)")
+                }
+            }
+        }
+    }
+
+    private func chip(_ attachment: PromptAttachment) -> some View {
+        let failed = if case .failed = attachment.status { true } else { false }
+        return HStack(spacing: 5) {
+            Group {
+                switch attachment.status {
+                case .uploading: ProgressView().controlSize(.mini).scaleEffect(0.8)
+                case .ready: Image(systemName: "doc.fill").foregroundStyle(IslandStyle.white(IslandStyle.secondary))
+                case .failed: Image(systemName: "exclamationmark.circle.fill").foregroundStyle(IslandStyle.bad)
+                }
+            }
+            .font(.system(size: 10, weight: .semibold))
+            .frame(width: 12, height: 12)
+            Text(attachment.name)
+                .font(IslandStyle.caption)
+                .foregroundStyle(failed ? IslandStyle.bad : IslandStyle.white(attachment.status == .uploading ? IslandStyle.secondary : IslandStyle.primary))
+                .lineLimit(1).truncationMode(.middle)
+                .frame(maxWidth: 150, alignment: .leading)
+                .fixedSize(horizontal: true, vertical: false)
+            Button { model.removeAttachment(attachment.id) } label: {
+                Image(systemName: "xmark").font(.system(size: 8, weight: .bold))
+                    .foregroundStyle(IslandStyle.white(IslandStyle.secondary))
+                    .frame(width: 16, height: 16)
+                    .background(Circle().fill(IslandStyle.white(0.1)))
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .disabled(model.draft.sending)
+            .help("Remove")
+            .accessibilityLabel("Remove \(attachment.name)")
+        }
+        .padding(.leading, 8).padding(.trailing, 4)
+        .frame(height: 24)
+        .background(Capsule().fill(failed ? IslandStyle.bad.opacity(0.14) : IslandStyle.white(0.1)))
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(accessibility(attachment))
+    }
+
+    private func accessibility(_ attachment: PromptAttachment) -> String {
+        switch attachment.status {
+        case .uploading: "\(attachment.name), uploading"
+        case .ready: "\(attachment.name), ready"
+        case .failed(let reason): "\(attachment.name), failed: \(reason)"
+        }
+    }
+}
+
+/// Left to right, wrapping onto the next row.
+struct IslandFlow: SwiftUI.Layout {
+    var spacing: CGFloat = 6
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        arrange(width: proposal.width ?? .infinity, subviews: subviews).size
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        for (index, frame) in arrange(width: bounds.width, subviews: subviews).frames.enumerated() {
+            subviews[index].place(at: CGPoint(x: bounds.minX + frame.minX, y: bounds.minY + frame.minY), proposal: ProposedViewSize(frame.size))
+        }
+    }
+
+    private func arrange(width: CGFloat, subviews: Subviews) -> (frames: [CGRect], size: CGSize) {
+        var frames: [CGRect] = [], x: CGFloat = 0, y: CGFloat = 0, row: CGFloat = 0, widest: CGFloat = 0
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if x > 0, x + size.width > width { x = 0; y += row + spacing; row = 0 }
+            frames.append(CGRect(origin: CGPoint(x: x, y: y), size: size))
+            x += size.width + spacing
+            row = max(row, size.height)
+            widest = max(widest, x - spacing)
+        }
+        return (frames, CGSize(width: widest, height: frames.isEmpty ? 0 : y + row))
     }
 }
 

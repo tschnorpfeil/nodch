@@ -41,6 +41,19 @@ public struct PendingApproval: Equatable, Sendable, Identifiable {
     }
 }
 
+/// A file uploaded to Nod and not yet sent, mapped from Nod's `Artifact` (POST /api/uploads). Nod keeps an upload for
+/// a day; it goes out as one of the message's `attachmentIds`.
+public struct NodAttachment: Equatable, Sendable, Identifiable {
+    public var id: String
+    public var name: String
+    public var mimeType: String
+    public var size: Int
+
+    public init(id: String, name: String, mimeType: String, size: Int) {
+        self.id = id; self.name = name; self.mimeType = mimeType; self.size = size
+    }
+}
+
 public enum IslandState: Equatable, Sendable {
     /// Nod cannot be reached or rejected the credentials.
     case offline(reason: String)
@@ -56,7 +69,10 @@ public enum IslandState: Equatable, Sendable {
 
 /// Everything the UI may ask of Nod. Each call is one explicit user action; implementations never retry an approval.
 @MainActor public protocol NodActions: AnyObject {
-    func send(prompt: String) async throws
+    /// Sends one message. `attachments` were uploaded with `upload(file:)`; the text may be empty when there are some.
+    func send(prompt: String, attachments: [NodAttachment]) async throws
+    /// Uploads one file the person dropped on the island. Nothing is sent until they send the prompt.
+    func upload(file: URL) async throws -> NodAttachment
     func answer(approval: PendingApproval, approved: Bool) async throws
     func stop() async throws
     /// Opens Nod's own window, e.g. "/" or "/vault".

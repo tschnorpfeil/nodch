@@ -1,4 +1,5 @@
 import Foundation
+import UniformTypeIdentifiers
 
 public enum NodClientError: Error, LocalizedError, Equatable, Sendable {
     case configuration(String)
@@ -8,6 +9,7 @@ public enum NodClientError: Error, LocalizedError, Equatable, Sendable {
     case http(Int, String)
     case network(String)
     case invalidResponse
+    case invalidInput(String)
 
     public var errorDescription: String? {
         switch self {
@@ -18,6 +20,7 @@ public enum NodClientError: Error, LocalizedError, Equatable, Sendable {
         case .http(let status, let reason): "Nod returned HTTP \(status). \(reason)"
         case .network(let reason): "Cannot reach Nod. \(reason)"
         case .invalidResponse: "Nod returned an invalid response."
+        case .invalidInput(let reason): reason
         }
     }
 }
@@ -49,12 +52,64 @@ public final class NodClient: Sendable {
         catch { throw NodClientError.invalidResponse }
     }
 
-    public func send(prompt: String) async throws -> NodSubmission {
-        try await submit(MessageInput(text: prompt, clientMessageId: UUID().uuidString))
+    public func send(prompt: String, attachments: [NodAttachment] = []) async throws -> NodSubmission {
+        guard !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !attachments.isEmpty else {
+            throw NodClientError.invalidInput("Write a message or attach a file before sending.")
+        }
+        return try await submit(MessageInput(text: prompt, clientMessageId: UUID().uuidString.lowercased(),
+                                             attachmentIds: attachments.map(\.id)))
+    }
+
+    public func upload(file dropped: URL) async throws -> NodAttachment {
+        guard dropped.isFileURL else { throw NodClientError.invalidInput("Choose a local file to upload.") }
+        // A symlink uploads the file it points to, under the name the person dropped.
+        let file = dropped.resolvingSymlinksInPath()
+        let scoped = file.startAccessingSecurityScopedResource()
+        defer { if scoped { file.stopAccessingSecurityScopedResource() } }
+        // Nod 915e4f1: src/shared/files.ts and src/server/artifacts.ts.
+        let limit = 90 * 1024 * 1024
+        let sizeError = NodClientError.invalidInput("Choose a file between 1 byte and 90 MiB to upload.")
+        let bytes: Data
+        do {
+            let values = try file.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey])
+            guard values.isRegularFile == true else {
+                throw NodClientError.invalidInput("Choose a file to upload; folders and packages are not supported.")
+            }
+            guard let size = values.fileSize, size > 0, size <= limit else { throw sizeError }
+            let handle = try FileHandle(forReadingFrom: file)
+            defer { try? handle.close() }
+            // Bound the read as well, in case the file grows after the size check. The whole file is held in memory
+            // (about twice, with the multipart body): fine for Nod's 90 MiB cap.
+            bytes = try handle.read(upToCount: limit + 1) ?? Data()
+            guard !bytes.isEmpty, bytes.count <= limit else { throw sizeError }
+        } catch let error as NodClientError { throw error }
+        catch { throw NodClientError.invalidInput("Cannot read the selected file. \(error.localizedDescription)") }
+
+        let boundary = "nodch-\(UUID().uuidString)"
+        // Nod's multipart parser does not percent-decode, so only what would break the header is escaped, as browsers
+        // do; a backslash would read as a path separator there.
+        let name = dropped.lastPathComponent
+            .replacingOccurrences(of: "\"", with: "%22")
+            .replacingOccurrences(of: "\\", with: "%5C")
+            .replacingOccurrences(of: "\r", with: "%0D")
+            .replacingOccurrences(of: "\n", with: "%0A")
+        let mime = UTType(filenameExtension: file.pathExtension)?.preferredMIMEType ?? "application/octet-stream"
+        var body = Data("--\(boundary)\r\nContent-Disposition: form-data; name=\"file\"; filename=\"\(name)\"\r\nContent-Type: \(mime)\r\n\r\n".utf8)
+        body.append(bytes)
+        body.append(Data("\r\n--\(boundary)--\r\n".utf8))
+        var request = try configuration.request(path: "/api/uploads", method: "POST")
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        request.httpBody = body
+        let data = try await perform(request)
+        struct Artifact: Decodable { let id: String; let name: String; let mimeType: String; let size: Int }
+        do {
+            let artifact = try JSONDecoder().decode(Artifact.self, from: data)
+            return NodAttachment(id: artifact.id, name: artifact.name, mimeType: artifact.mimeType, size: artifact.size)
+        } catch { throw NodClientError.invalidResponse }
     }
 
     public func answer(approval: PendingApproval, approved: Bool) async throws -> NodSubmission {
-        try await submit(MessageInput(text: approved ? "Yes" : "No", clientMessageId: UUID().uuidString,
+        try await submit(MessageInput(text: approved ? "Yes" : "No", clientMessageId: UUID().uuidString.lowercased(),
                                       replyToMessageId: approval.messageID,
                                       approvalAnswer: .init(approvalId: approval.id, approved: approved)))
     }
@@ -101,6 +156,7 @@ public final class NodClient: Sendable {
         struct Answer: Encodable { let approvalId: String; let approved: Bool }
         let text: String
         let clientMessageId: String
+        var attachmentIds: [String] = []
         var replyToMessageId: String? = nil
         var approvalAnswer: Answer? = nil
     }
