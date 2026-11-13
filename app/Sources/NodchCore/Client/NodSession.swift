@@ -197,5 +197,19 @@ import Foundation
         }
     }
 
-    public func openNod(path: String) { NSWorkspace.shared.open(client.configuration.browserURL(path: path)) }
+    public func openNod(path: String) {
+        let workspace = NSWorkspace.shared
+        let fallbackURL = client.configuration.browserURL(path: path)
+        guard let appURL = workspace.urlForApplication(withBundleIdentifier: "dev.nod.desktop") else {
+            workspace.open(fallbackURL)
+            return
+        }
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = true
+        workspace.openApplication(at: appURL, configuration: configuration) { app, error in
+            if app == nil || error != nil {
+                Task { @MainActor in NSWorkspace.shared.open(fallbackURL) }
+            }
+        }
+    }
 }

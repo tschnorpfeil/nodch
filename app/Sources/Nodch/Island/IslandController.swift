@@ -27,7 +27,7 @@ final class IslandController {
         model = IslandModel(store: store)
         model.voice = voice
         presenter = IslandPresenter(model: model)
-        lastState = store.state
+        if case .asks = store.state { lastState = .rest } else { lastState = store.state }
     }
 
     func start() {
@@ -50,6 +50,7 @@ final class IslandController {
             model.focusToken += 1
         }
         presenter.onEscape = { [weak self] in self?.escape() }
+        presenter.onQuestionKey = { [weak self] key in self?.model.questionKey(key) ?? false }
         presenter.closesOnOutsideClick = { [weak self] in
             guard let cause = self?.openCause else { return true }
             return IslandPresentation.closesOnOutsideClick(cause)
@@ -58,6 +59,7 @@ final class IslandController {
             guard let self else { return }
             openCause = nil
             model.isOpen = false
+            model.highlightedChoice = nil
             model.perform(model.draft.closed())
         }
         presenter.view.onDragOver = { [weak self] over in self?.dragOver(over) }
@@ -107,8 +109,9 @@ final class IslandController {
             doneTimer = nil
             model.doneExpired = false
         }
+        let newQuestion = IslandPresentation.newQuestion(from: old, to: new)
         if IslandPresentation.waitingID(old) != IslandPresentation.waitingID(new) {
-            model.actionError = nil; model.approvalShownAt = Date(); model.picked = []
+            model.actionError = nil; model.approvalShownAt = Date(); model.picked = []; model.highlightedChoice = nil
         }
         if case .working = new {} else if case .working = old { model.actionError = nil }
         // An open card turns into the answer (with the prompt under it) when Nod finishes or asks, so it stays at rest.
@@ -117,6 +120,13 @@ final class IslandController {
         case .reveal: open(.approval)
         case .conceal: presenter.close()
         case .none: break
+        }
+        if newQuestion, model.isOpen {
+            let front = NSWorkspace.shared.frontmostApplication
+            if front?.processIdentifier != ProcessInfo.processInfo.processIdentifier { previousApp = front }
+            model.showsPrompt = true
+            presenter.open(key: true)
+            model.focusToken += 1
         }
         refresh()
     }
