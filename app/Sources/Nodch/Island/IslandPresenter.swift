@@ -423,7 +423,13 @@ final class IslandPresenter: NSObject {
         let clicks: NSEvent.EventTypeMask = [.leftMouseDown, .rightMouseDown, .otherMouseDown]
         let local = NSEvent.addLocalMonitorForEvents(matching: clicks.union(.keyDown)) { [weak self] event in
             // Only while the island is the key window: a card that opened by itself never sees these keys.
-            if event.type == .keyDown, let self, event.window === self.panel, self.panel.isKeyWindow,
+            // A held key does not repeat a decision: one press, one approve, decline, send or stop. In a text field the
+            // repeats stay with the field (⌥⌫ keeps deleting words).
+            if event.type == .keyDown, event.isARepeat, let self, event.window === self.panel, Self.cardKey(event) != nil,
+               !(self.panel.firstResponder is NSTextView) {
+                return nil
+            }
+            if event.type == .keyDown, !event.isARepeat, let self, event.window === self.panel, self.panel.isKeyWindow,
                let (key, modifier) = Self.cardKey(event),
                !((self.panel.firstResponder as? NSTextView)?.hasMarkedText() ?? false),
                MainActor.assumeIsolated({ self.onCardKey?(key, modifier) ?? false }) {

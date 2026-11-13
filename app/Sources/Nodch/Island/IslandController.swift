@@ -45,7 +45,8 @@ final class IslandController {
         presenter.view.onPanelShown = { [weak self] in
             guard let self else { return }
             // Reopening keeps the SwiftUI card alive, so its onAppear does not run: restart the click guard here.
-            if model.approval != nil, !model.showsPrompt { model.startAnswerGuard() }
+            // An approval card, or Nod's question with its choices, waits out the guard again on every showing.
+            if model.approval != nil && !model.showsPrompt || model.asking?.question != nil { model.startAnswerGuard() }
             guard model.showsPrompt else { return }
             model.focusToken += 1
         }

@@ -262,6 +262,8 @@ import Observation
     /// Sends the ticked choices of a multiple-choice question, with the words in the field if there are any.
     func sendPicks() {
         guard let asked = asking, let question = asked.question, !picked.isEmpty else { return }
+        // The same guard as a single choice: a card that just (re)appeared ignores Send for a moment.
+        guard IslandPresentation.acceptsAnswer(shownFor: Date().timeIntervalSince(approvalShownAt)) else { return }
         answer(asked, choices: question.choices.filter { picked.contains($0.id) }, withWords: true)
     }
 
