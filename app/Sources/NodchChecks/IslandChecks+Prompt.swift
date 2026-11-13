@@ -51,8 +51,9 @@ extension IslandChecks {
 
         // Mic button.
         var toggled = listening("Hello")
-        check(toggled.toggleVoice() == [.stopVoice(finalize: false)] && toggled.voice == .off && toggled.display == "Hello",
+        check(toggled.toggleVoice() == [.stopVoice(finalize: true)] && toggled.voice == .finishing && toggled.display == "Hello",
               "prompt: the mic button stops listening and keeps the words")
+        _ = toggled.voiceFinished()
         check(toggled.toggleVoice() == [.startVoice] && toggled.voice == .starting, "prompt: the mic button starts listening again")
 
         // Escape.
@@ -69,7 +70,6 @@ extension IslandChecks {
         draft.heard("from today", final: false)
         check(draft.submit() == [.stopVoice(finalize: true)] && draft.voice == .finishing, "prompt: Enter → microphone stops first")
         check(draft.submit().isEmpty, "prompt: a second Enter while finishing sends nothing")
-        check(draft.typed("changed").isEmpty && draft.display == "Summarize my mail from today", "prompt: typing waits while finishing")
         draft.heard("from today.", final: true)
         let sent = draft.voiceFinished()
         check(sent == [.send(prompt: "Summarize my mail from today.", attachments: [])] && draft.sending,

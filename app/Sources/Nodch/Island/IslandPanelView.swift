@@ -123,6 +123,7 @@ struct IslandPanelView: View {
 struct IslandPromptCard: View {
     var model: IslandModel
     var focused: FocusState<Bool>.Binding
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         let draft = model.draft
@@ -144,6 +145,7 @@ struct IslandPromptCard: View {
             if !draft.attachments.isEmpty {
                 IslandChips(model: model, attachments: draft.attachments)
             }
+            voiceStatus(draft)
             footer(draft)
         }
         .animation(IslandStyle.fade, value: draft.error)
@@ -157,7 +159,7 @@ struct IslandPromptCard: View {
         // While the microphone is on, the words show in `live` on top of the field. The focused field does not
         // reliably take the transcriber's words while it is being edited (it stayed empty mid-sentence), so its own
         // text is hidden then; it keeps the focus, so the first keystroke still takes over (`PromptDraft.takeOver`).
-        let live = draft.voice.isActive
+        let live = draft.voice.isActive || draft.voice == .finishing
         return ZStack(alignment: .topLeading) {
             TextField("Ask Nod", text: text,
                       prompt: Text(live ? "" : placeholder(draft)).foregroundStyle(IslandStyle.white(IslandStyle.secondary)),
@@ -166,7 +168,7 @@ struct IslandPromptCard: View {
                 .textFieldStyle(.plain)
                 .foregroundStyle(live ? Color.clear : IslandStyle.white(IslandStyle.primary))
                 .focused(focused)
-                .disabled(draft.sending || draft.voice == .finishing)
+                .disabled(draft.sending)
                 .onSubmit { model.submitPrompt() }
             if live { liveWords(draft) }
         }
@@ -232,21 +234,39 @@ struct IslandPromptCard: View {
         }
     }
 
-    /// One quiet line: the error, what the drop left out, why voice is off, or how the keys work.
+    @ViewBuilder private func voiceStatus(_ draft: PromptDraft) -> some View {
+        if case .unavailable(let hint) = draft.voice {
+            footnote(hint.text, symbol: "mic.slash")
+        } else if draft.voice.isActive || draft.voice == .finishing || draft.voiceReady {
+            HStack(spacing: 7) {
+                if draft.voice == .listening {
+                    HStack(alignment: .center, spacing: 2) {
+                        ForEach(0..<5) { index in
+                            Capsule().fill(IslandStyle.accent)
+                                .frame(width: 3, height: 4 + CGFloat(min(1, max(0, model.voiceLevel * 2 - Float(index) * 0.18))) * 10)
+                        }
+                    }
+                    .frame(width: 23, height: 14)
+                    .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: model.voiceLevel)
+                    .accessibilityHidden(true)
+                } else {
+                    Image(systemName: draft.voiceReady ? "checkmark.circle.fill" : "mic.fill")
+                        .foregroundStyle(IslandStyle.accent)
+                }
+                Text(draft.voice == .starting ? "Preparing microphone…" :
+                     draft.voice == .listening ? "Listening · type to take over" :
+                     draft.voice == .finishing ? "Transcribing…" : "Ready to edit")
+            }
+            .font(IslandStyle.caption).foregroundStyle(IslandStyle.white(IslandStyle.secondary))
+            .accessibilityElement(children: .combine)
+        }
+    }
+
     @ViewBuilder private func footer(_ draft: PromptDraft) -> some View {
         if let error = draft.error {
             IslandErrorLine(text: error)
         } else if let notice = draft.notice {
             footnote(notice, symbol: "info.circle")
-        } else if case .unavailable(let hint) = draft.voice {
-            footnote(hint.text, symbol: "mic.slash")
-        } else if draft.voice == .listening || draft.voice == .starting {
-            HStack(spacing: 6) {
-                IslandListeningDot(active: draft.voice == .listening)
-                Text("Listening  ·  type to take over  ·  ↩ send  ·  esc discard")
-            }
-            .font(IslandStyle.caption).foregroundStyle(IslandStyle.white(IslandStyle.tertiary + 0.05))
-            .accessibilityHidden(true)
         } else if let question = model.asking?.question, !question.choices.isEmpty {
             Text(question.multiple ? "↑↓ navigate  ·  ↩ select  ·  Send to answer  ·  esc close" : "↑↓ navigate  ·  ↩ answer  ·  esc close")
                 .font(IslandStyle.caption).foregroundStyle(IslandStyle.white(IslandStyle.tertiary))
@@ -364,6 +384,7 @@ struct IslandMicButton: View {
     var model: IslandModel
     let voice: VoiceState
     let level: Float
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         let listening = voice == .listening
@@ -372,7 +393,7 @@ struct IslandMicButton: View {
                 Circle().fill(IslandStyle.accent.opacity(listening ? 0.22 : 0))
                     .frame(width: 20, height: 20)
                     .scaleEffect(listening ? 0.8 + CGFloat(level) * 0.45 : 0.6)
-                    .animation(.easeOut(duration: 0.15), value: level)
+                    .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: level)
                 Image(systemName: symbol).font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(color)
             }
