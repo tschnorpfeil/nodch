@@ -36,21 +36,24 @@ extension IslandChecks {
         check(choosing.voiceFinished().isEmpty && choosing.display == "Hello world",
               "dictation: a choice keeps shown words and ignores late transcription")
 
-        var activity = VoiceActivity(started: 0)
-        check(activity.sample(level: 0.6, at: 9.9) == nil && activity.sample(level: 0.6, at: 10) == true,
-              "dictation: background noise does not count as speech; initial timeout")
-        activity = VoiceActivity(started: 0)
-        _ = activity.sample(level: 0.1, at: 0)
-        activity.words("Hello", at: 1)
-        check(activity.sample(level: 0.1, at: 2.4) == nil, "dictation: short pause stays listening")
-        check(activity.sample(level: 0.7, at: 2.4) == nil && activity.sample(level: 0.1, at: 3.8) == nil,
-              "dictation: resumed speech resets silence")
-        check(activity.sample(level: 0.1, at: 3.9) == false, "dictation: sustained silence finishes")
-        var hum = VoiceActivity(started: 0)
-        hum.words("Hello", at: 1)
-        _ = hum.sample(level: 0.8, at: 3.9)
-        check(hum.sample(level: 0.8, at: 5.4) == false,
-              "dictation: continuous hum cannot extend speech indefinitely without recognition")
+        var activity = VoiceActivity()
+        for i in 1...20 {
+            check(activity.sample(confidence: 0.2, end: Double(i) / 2) == (i == 20 ? true : nil),
+                  "dictation: initial noise times out only after ten analyzed seconds")
+        }
+        activity = VoiceActivity()
+        for i in 1...12 {
+            check(activity.sample(confidence: 0.9, end: Double(i) / 2) == nil,
+                  "dictation: continuous and repeated speech stays listening beyond three seconds")
+        }
+        check(activity.sample(confidence: 0.2, end: 7) == nil, "dictation: reordered quiet waits for missing audio")
+        check(activity.sample(confidence: 0.9, end: 6.5) == nil, "dictation: delayed speech precedes quiet")
+        check(activity.sample(confidence: 0.9, end: 7.5) == nil, "dictation: resumed speech resets silence")
+        check(activity.sample(confidence: 0.2, end: 7.0) == nil, "dictation: stale result is ignored")
+        check(activity.sample(confidence: 0.2, end: 8.5) == nil, "dictation: reordered quiet waits for earlier window")
+        check(activity.sample(confidence: 0.2, end: 8) == nil, "dictation: short pause stays listening")
+        check(activity.sample(confidence: 0.2, end: 9) == false, "dictation: analyzed silence finishes")
+        check(activity.sample(confidence: 0.9, end: 9.5) == nil, "dictation: decision is emitted once")
         var explicitSend = listening(final: "Hello")
         _ = explicitSend.finishVoice()
         check(explicitSend.submit().isEmpty, "dictation: Return during transcription waits for final words")

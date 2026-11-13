@@ -1,30 +1,34 @@
 import Foundation
 
-/// Monotonic seconds and recognizer evidence keep steady background noise from starting dictation.
+/// Consumes ordered classifier windows in audio time, never wall-clock or transcript time.
 public struct VoiceActivity: Sendable {
-    private let started: TimeInterval
+    private var nextWindow = 1
+    private var pending: [Int: Double] = [:]
     private var lastSpeech: TimeInterval?
-    private var lastRecognition: TimeInterval?
-    private var ambient: Float = 0
-    private var lastWords = ""
+    private var ended = false
+    public private(set) var failed = false
 
-    public init(started: TimeInterval) { self.started = started }
-
-    public mutating func words(_ words: String, at now: TimeInterval) {
-        let words = words.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !words.isEmpty, words != lastWords else { return }
-        lastWords = words
-        lastSpeech = now
-        lastRecognition = now
-    }
+    public init() {}
 
     /// Returns true for no speech, false for silence after speech, nil while listening.
-    public mutating func sample(level: Float, at now: TimeInterval) -> Bool? {
-        if let lastSpeech {
-            if now - (lastRecognition ?? now) < 3, level > max(0.35, ambient + 0.15) { self.lastSpeech = now }
-            return now - (self.lastSpeech ?? lastSpeech) >= 1.5 ? false : nil
+    public mutating func sample(confidence: Double, end: TimeInterval) -> Bool? {
+        guard !ended, end.isFinite, end > 0, end < Double(Int.max) / 2 else { return nil }
+        let window = Int((end * 2).rounded())
+        guard window >= nextWindow else { return nil }
+        guard window < nextWindow + 64 else { failed = true; return nil }
+        pending[window] = confidence
+        while let confidence = pending.removeValue(forKey: nextWindow) {
+            let time = Double(nextWindow) / 2
+            nextWindow += 1
+            if confidence >= 0.5 { lastSpeech = time }
+            let decision: Bool?
+            if let lastSpeech {
+                decision = time - lastSpeech >= 1.5 ? false : nil
+            } else {
+                decision = time >= 10 ? true : nil
+            }
+            if let decision { ended = true; pending.removeAll(); return decision }
         }
-        ambient = max(ambient, level)
-        return now - started >= 10 ? true : nil
+        return nil
     }
 }
