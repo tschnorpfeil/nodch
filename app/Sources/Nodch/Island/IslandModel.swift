@@ -71,6 +71,8 @@ import Observation
     @ObservationIgnored var onCollapse: () -> Void = {}
     /// The prompt went out: the card closes and the keyboard goes back.
     @ObservationIgnored var onSent: () -> Void = {}
+    /// Settings…, Start at login and Quit for the right-click menus.
+    @ObservationIgnored var commands = AppCommands()
     @ObservationIgnored var log: (String) -> Void = { print("nodch: \($0)") }
     /// The microphone; nil (snapshots) reads as voice not available.
     @ObservationIgnored var voice: VoiceSource?

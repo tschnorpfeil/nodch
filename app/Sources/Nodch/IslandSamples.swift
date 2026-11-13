@@ -121,7 +121,7 @@ enum IslandSamples {
     }
 
     static let failed = IslandState.failed(message: "The browser session expired while filling in the form. Sign in again in Nod, then retry from there.")
-    static let offline = IslandState.offline(reason: "Nod isn’t running, or it doesn’t answer on localhost.")
+    static let offline = IslandState.offline(reason: ConnectionCheck.unreachable.message(address: ConnectionSettings.defaultURL))
     static let done = IslandState.done(summary: "Expense report sent to finance")
 
     /// A Markdown answer as Nod writes it: the wing must read it as plain text, the card render it.

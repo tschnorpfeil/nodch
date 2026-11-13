@@ -28,6 +28,7 @@ struct IslandCompactView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .contentShape(Rectangle())
         .onTapGesture { model.onCompactClick() }
+        .contextMenu { IslandAppMenu(commands: model.commands) }
         .environment(\.colorScheme, .dark)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(accessibilityLabel(shown))

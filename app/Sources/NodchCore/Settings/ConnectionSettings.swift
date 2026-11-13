@@ -8,6 +8,14 @@ import Foundation
     func removeToken(account: String) throws
 }
 
+/// Where the address is kept: `UserDefaults` in the app, a dictionary in checks and snapshots.
+public protocol SettingsDefaults: AnyObject {
+    func string(forKey key: String) -> String?
+    func set(_ value: Any?, forKey key: String)
+}
+
+extension UserDefaults: SettingsDefaults {}
+
 /// What a connection was resolved from, in order of precedence.
 public enum ConnectionSource: Equatable, Sendable {
     /// NOD_URL, NOD_AUTH_TOKEN or NOD_DATA_ROOT is set: the environment decides, settings are ignored.
@@ -33,20 +41,20 @@ public enum TokenChange: Equatable, Sendable {
 
 /// Connection settings stored per user. The address lives in UserDefaults; the token only ever in `TokenStore`.
 @MainActor public struct ConnectionSettings {
-    public static let serverKey = "nodch.serverURL"
-    public static let defaultURL = URL(string: "http://localhost:4310")!
-    public static let environmentKeys = ["NOD_URL", "NOD_AUTH_TOKEN", "NOD_DATA_ROOT"]
+    nonisolated public static let serverKey = "nodch.serverURL"
+    nonisolated public static let defaultURL = URL(string: "http://localhost:4310")!
+    nonisolated public static let environmentKeys = ["NOD_URL", "NOD_AUTH_TOKEN", "NOD_DATA_ROOT"]
 
-    public let defaults: UserDefaults
+    public let defaults: SettingsDefaults
     public let tokens: TokenStore
 
-    public init(defaults: UserDefaults = .standard, tokens: TokenStore) {
+    public init(defaults: SettingsDefaults = UserDefaults.standard, tokens: TokenStore) {
         self.defaults = defaults
         self.tokens = tokens
     }
 
     /// The NOD_* variables that are set (and not empty), in a fixed order.
-    public static func environmentInEffect(_ environment: [String: String]) -> [String] {
+    nonisolated public static func environmentInEffect(_ environment: [String: String]) -> [String] {
         environmentKeys.filter { !(environment[$0] ?? "").isEmpty }
     }
 
@@ -94,7 +102,7 @@ public enum TokenChange: Equatable, Sendable {
 
     /// An HTTP(S) origin from what the person typed: "localhost:4310" reads as http://localhost:4310, a trailing slash
     /// is dropped, and anything with a path, query, user or password is refused.
-    public static func normalize(_ text: String) throws -> URL {
+    nonisolated public static func normalize(_ text: String) throws -> URL {
         var value = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if value.isEmpty { return defaultURL }
         if !value.contains("://") { value = "http://" + value }
@@ -113,14 +121,14 @@ public enum TokenChange: Equatable, Sendable {
     }
 
     /// The Keychain account for a server: scheme, host and explicit port, e.g. "http://localhost:4310".
-    public static func origin(_ url: URL) -> String {
+    nonisolated public static func origin(_ url: URL) -> String {
         let scheme = url.scheme?.lowercased() ?? "http"
         let port = url.port ?? (scheme == "https" ? 443 : 80)
         return "\(scheme)://\((url.host ?? "").lowercased()):\(port)"
     }
 
     /// First run: nothing in the environment, nothing saved, and the default address does not answer or wants a token.
-    public static func opensSettingsAtLaunch(source: ConnectionSource, check: ConnectionCheck) -> Bool {
+    nonisolated public static func opensSettingsAtLaunch(source: ConnectionSource, check: ConnectionCheck) -> Bool {
         guard source == .defaults else { return false }
         switch check {
         case .unreachable, .unauthorized, .missingCredentials: return true

@@ -44,9 +44,15 @@ public enum ConnectionCheck: Equatable, Sendable {
         return text.hasSuffix("/") ? String(text.dropLast()) : text
     }
 
+    /// Gives up after 10 seconds, so a wrong address does not leave Settings waiting for a minute.
+    public static var testSession: URLSession {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.timeoutIntervalForRequest = 10
+        return URLSession(configuration: configuration)
+    }
+
     /// One GET /api/state with `configuration`. Nothing else is sent, and nothing is retried.
-    public static func run(_ configuration: NodConfiguration,
-                           session: URLSession = URLSession(configuration: .ephemeral)) async -> ConnectionCheck {
+    public static func run(_ configuration: NodConfiguration, session: URLSession = testSession) async -> ConnectionCheck {
         do {
             _ = try await NodClient(configuration: configuration, session: session).state()
             return .connected

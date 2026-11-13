@@ -1,8 +1,9 @@
 import Foundation
 import NodchCore
 
-/// Connection settings: precedence, where the token goes, error words and the first-run decision. A dictionary stands
-/// in for the Keychain and a throwaway UserDefaults suite for the real defaults; nothing reaches a real Nod.
+/// Connection settings: precedence, where the token goes, error words and the first-run decision. Dictionaries stand in
+/// for the Keychain and for UserDefaults (a real suite would leave a plist in ~/Library/Preferences); nothing reaches
+/// a real Nod.
 @MainActor enum SettingsChecks {
     final class FakeTokens: TokenStore {
         var items: [String: String] = [:]
@@ -11,19 +12,23 @@ import NodchCore
         func removeToken(account: String) throws { items[account] = nil }
     }
 
+    /// Records every key written, as UserDefaults would hold it.
+    final class FakeDefaults: SettingsDefaults {
+        var values: [String: Any] = [:]
+        func string(forKey key: String) -> String? { values[key] as? String }
+        func set(_ value: Any?, forKey key: String) { values[key] = value }
+    }
+
     static func run() async {
-        let suite = "dev.nodch.checks.\(UUID().uuidString)"
-        guard let defaults = UserDefaults(suiteName: suite) else { check(false, "settings: throwaway defaults suite"); return }
-        defer { defaults.removePersistentDomain(forName: suite) }
         do {
-            try precedenceChecks(defaults: defaults, suite: suite)
+            try precedenceChecks(defaults: FakeDefaults())
             normalizeChecks()
             firstRunChecks()
             try await errorChecks()
         } catch { check(false, "settings checks: \(error)") }
     }
 
-    static func precedenceChecks(defaults: UserDefaults, suite: String) throws {
+    static func precedenceChecks(defaults: FakeDefaults) throws {
         let tokens = FakeTokens()
         let settings = ConnectionSettings(defaults: defaults, tokens: tokens)
         let fresh = try settings.resolve(environment: [:])
@@ -56,10 +61,8 @@ import NodchCore
               "settings: names only the NOD_* variables that are set")
 
         // The token is only in the token store, under the origin; defaults hold the address and nothing else.
-        let domain = defaults.persistentDomain(forName: suite) ?? [:]
-        check(Set(domain.keys) == [ConnectionSettings.serverKey], "settings: defaults hold only \(ConnectionSettings.serverKey)")
-        let stored = domain.values.map { "\($0)" } + defaults.dictionaryRepresentation().values.map { "\($0)" }
-        check(!stored.contains { $0.contains(secret) }, "settings: the token never reaches UserDefaults")
+        check(Set(defaults.values.keys) == [ConnectionSettings.serverKey], "settings: defaults hold only \(ConnectionSettings.serverKey)")
+        check(!defaults.values.values.contains { "\($0)".contains(secret) }, "settings: the token never reaches UserDefaults")
         check(tokens.items == ["https://nod.example.com:443": secret], "settings: token stored under the normalized origin")
 
         try settings.save(server: "https://nod.example.com", token: .keep)
