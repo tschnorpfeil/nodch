@@ -1,5 +1,7 @@
 #!/bin/sh
 # Builds a release nodch.app into build/ (gitignored), ad-hoc signed. No Xcode needed.
+# With NODCH_SIGN_IDENTITY set (a "Developer ID Application: ..." name), it signs with that identity, the hardened
+# runtime and app/Resources/Nodch.entitlements instead. scripts/release.sh does that and notarizes.
 #
 #   scripts/bundle.sh                              build build/Nodch.app
 #   build/Nodch.app/Contents/MacOS/Nodch --demo    try it without Nod
@@ -13,7 +15,7 @@ root=$(cd "$(dirname "$0")/.." && pwd)
 app="$root/build/Nodch.app"
 
 case "${1:-}" in
-    -h|--help) sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
 esac
 
 swift build --package-path "$root/app" -c release --product Nodch
@@ -26,7 +28,12 @@ cp "$root/app/Resources/Info.plist" "$app/Contents/Info.plist"
 printf 'APPL????' > "$app/Contents/PkgInfo"
 
 plutil -lint "$app/Contents/Info.plist"
-codesign --force --sign - --identifier dev.nodch.Nodch "$app"
+if [ -n "${NODCH_SIGN_IDENTITY:-}" ]; then
+    codesign --force --sign "$NODCH_SIGN_IDENTITY" --identifier dev.nodch.Nodch \
+        --options runtime --timestamp --entitlements "$root/app/Resources/Nodch.entitlements" "$app"
+else
+    codesign --force --sign - --identifier dev.nodch.Nodch "$app"
+fi
 codesign --verify --deep --strict --verbose=2 "$app"
 
 echo "Built $app"
