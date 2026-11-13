@@ -114,6 +114,40 @@ public final class NodClient: Sendable {
                                       approvalAnswer: .init(approvalId: approval.id, approved: approved)))
     }
 
+    /// Answers Nod's open question as Nod's web app does (src/web/components/answer-choices.tsx `answer()`): the picked
+    /// labels in question order, then the person's trimmed words on the next line. Nod 915e4f1 src/server/thread.ts
+    /// checks that text against `choiceAnswerText`, and allows one pick without own words unless the question is multiple.
+    public func answer(question: NodAnswer, choices: [NodQuestion.Choice], text: String) async throws -> NodSubmission {
+        guard let open = question.question else {
+            throw NodClientError.invalidInput("This message no longer waits for an answer.")
+        }
+        let picked = Set(choices.map(\.id))
+        let chosen = open.choices.filter { picked.contains($0.id) }
+        guard chosen.count == picked.count else { throw NodClientError.invalidInput("Choose one of Nod's answers.") }
+        let written = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !chosen.isEmpty || !written.isEmpty else {
+            throw NodClientError.invalidInput("Pick an answer or write your own before sending.")
+        }
+        guard open.multiple || (chosen.count <= 1 && (chosen.isEmpty || written.isEmpty)) else {
+            throw NodClientError.invalidInput("Pick one answer, or write your own instead.")
+        }
+        let value = [chosen.isEmpty ? "" : Self.choiceAnswerText(chosen), written].filter { !$0.isEmpty }.joined(separator: "\n")
+        let ids = chosen.map(\.id)
+        let selection = chosen.isEmpty ? MessageInput.QuestionAnswer(custom: true)
+            : MessageInput.QuestionAnswer(choiceIds: ids, custom: written.isEmpty ? nil : true)
+        return try await submit(MessageInput(text: value, clientMessageId: UUID().uuidString.lowercased(),
+                                             replyToMessageId: question.id, questionAnswer: selection))
+    }
+
+    /// Nod 915e4f1 src/shared/answer-choices.ts `choiceAnswerText`.
+    static func choiceAnswerText(_ choices: [NodQuestion.Choice]) -> String {
+        choices.map { choice in
+            let label = choice.label.trimmingCharacters(in: .whitespacesAndNewlines)
+            let detail = choice.detail?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            return !detail.isEmpty && detail.lowercased() != label.lowercased() ? "\(label): \(detail)" : label
+        }.joined(separator: "\n")
+    }
+
     public func stop() async throws {
         var request = try configuration.request(path: "/api/thread/stop", method: "POST")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -154,11 +188,14 @@ public final class NodClient: Sendable {
 
     private struct MessageInput: Encodable {
         struct Answer: Encodable { let approvalId: String; let approved: Bool }
+        /// Nod's `questionAnswer`: `{choiceIds}`, `{choiceIds, custom: true}` or `{custom: true}`; nil keys are omitted.
+        struct QuestionAnswer: Encodable { var choiceIds: [String]? = nil; var custom: Bool? = nil }
         let text: String
         let clientMessageId: String
         var attachmentIds: [String] = []
         var replyToMessageId: String? = nil
         var approvalAnswer: Answer? = nil
+        var questionAnswer: QuestionAnswer? = nil
     }
 
     private func submit(_ input: MessageInput) async throws -> NodSubmission {

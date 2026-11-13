@@ -124,6 +124,12 @@ final class DemoActions: NodActions {
                                 : .done(summary: "Declined: \(approval.title)")
     }
 
+    func answer(question: NodAnswer, choices: [NodQuestion.Choice], text: String) async throws {
+        print("demo: answer(question: \(question.id), choices: \(choices.map(\.label)), text: \"\(text)\")")
+        try await Task.sleep(for: .milliseconds(400))
+        store?.state = IslandSamples.working(step: "Thinking about your answer", site: nil, title: nil, seconds: 0)
+    }
+
     func upload(file: URL) async throws -> NodAttachment {
         print("demo: upload(file: \(file.lastPathComponent))")
         try await Task.sleep(for: .milliseconds(350))
