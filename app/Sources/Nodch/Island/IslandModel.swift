@@ -208,7 +208,7 @@ import Observation
 
     /// Arrow keys only move the highlight. Return acts like a click on the highlighted choice.
     func questionKey(_ key: UInt16) -> Bool {
-        guard let question = asking?.question, !draft.sending, draft.voice != .finishing else { return false }
+        guard let question = asking?.question, !draft.sending else { return false }
         if key == 125 || key == 126 {
             guard !question.choices.isEmpty else { return false }
             highlightedChoice = IslandPresentation.nextChoice(highlightedChoice, choices: question.choices.map(\.id), down: key == 125)

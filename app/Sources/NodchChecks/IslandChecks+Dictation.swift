@@ -28,6 +28,14 @@ extension IslandChecks {
         check(done.voiceFinished().isEmpty && done.display == "Hello world" && !done.sending,
               "dictation: finalization leaves an editable draft without sending")
 
+        var choosing = listening(final: "Hello", volatile: "world")
+        _ = choosing.finishVoice()
+        check(choosing.answerChoice() == [.stopVoice(finalize: false)] && choosing.sending && choosing.voice == .off,
+              "dictation: an explicit choice during transcription is accepted and stops finalization")
+        choosing.heard("late", final: true)
+        check(choosing.voiceFinished().isEmpty && choosing.display == "Hello world",
+              "dictation: a choice keeps shown words and ignores late transcription")
+
         var activity = VoiceActivity(started: 0)
         check(activity.sample(level: 0.6, at: 9.9) == nil && activity.sample(level: 0.6, at: 10) == true,
               "dictation: background noise does not count as speech; initial timeout")
