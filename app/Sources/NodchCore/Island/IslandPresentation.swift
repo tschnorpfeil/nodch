@@ -98,9 +98,9 @@ public enum IslandPresentation {
         }
     }
 
-    /// Why the card opens. Only a person's own click or shortcut gives it the keyboard; an approval that arrives while
-    /// they type in another app shows without taking it.
-    public enum OpenCause: Equatable, Sendable { case click, hotkey, approval }
+    /// Why the card opens. Only a person's own click, shortcut or drop gives it the keyboard; an approval that arrives
+    /// while they type in another app shows without taking it.
+    public enum OpenCause: Equatable, Sendable { case click, hotkey, drop, approval }
 
     public static func takesKey(_ cause: OpenCause) -> Bool { cause != .approval }
 

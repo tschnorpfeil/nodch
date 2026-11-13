@@ -1,4 +1,4 @@
-# Fast gate on a real Mac: build and checks. No Nod server, no model, no network.
+# Fast gate on a real Mac: build, checks and the app bundle. No Nod server, no model, no network.
 name: CI
 
 on:
@@ -35,3 +35,5 @@ jobs:
         run: swift build --package-path app
       - name: NodchChecks
         run: swift run --package-path app NodchChecks
+      - name: App bundle
+        run: scripts/bundle.sh

@@ -50,6 +50,37 @@ import NodchCore
     case .working, .needsYou: throw NodClientError.configuration("Still busy after stop: \(session.store.state)")
     default: print("PASS stop -> accepted, island settles (\(session.store.state))")
     }
+    // Last: Nod hands an attached file to its workspace runtime, which this minimal fixture does not provide, so the
+    // turn it starts may fail. The contract is only that the upload reaches Nod and the message carries it.
+    let directory = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        .appendingPathComponent(".build/contract-upload-\(UUID().uuidString)")
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let file = directory.appendingPathComponent("Übersicht – März.txt")
+    let contents = "Nodch attachment contract."
+    try contents.write(to: file, atomically: true, encoding: .utf8)
+    let attachment = try await session.upload(file: file)
+    try require(UUID(uuidString: attachment.id) != nil && attachment.name == "Übersicht – März.txt" &&
+                attachment.mimeType == "text/plain" && attachment.size == contents.utf8.count,
+                "upload text file -> Artifact with id, name, MIME and size")
+    let submission = try await client.send(prompt: "", attachments: [attachment])
+    print("PASS send attachment without text -> accepted")
+    struct Snapshot: Decodable {
+        struct Message: Decodable {
+            struct Attachment: Decodable { let id: String; let name: String; let mimeType: String; let size: Int }
+            let id: String
+            let text: String
+            let attachments: [Attachment]
+        }
+        let messages: [Message]
+    }
+    let (data, response) = try await URLSession.shared.data(for: configuration.request(path: "/api/state"))
+    try require((response as? HTTPURLResponse)?.statusCode == 200, "GET state with uploaded attachment -> 200")
+    let message = try JSONDecoder().decode(Snapshot.self, from: data).messages.first { $0.id == submission.messageId }
+    let stored = message?.attachments.first
+    try require(message?.text == "" && stored?.id == attachment.id && stored?.name == attachment.name &&
+                stored?.mimeType == attachment.mimeType && stored?.size == attachment.size,
+                "GET state -> sent message carries uploaded attachment")
 }
 
 do { try await run() }

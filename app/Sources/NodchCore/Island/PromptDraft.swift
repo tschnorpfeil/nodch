@@ -1,0 +1,296 @@
+import Foundation
+
+// The quick prompt's decisions, pure so they are checkable: when the microphone is on, what the person's first
+// keystroke does to it, what Return sends and when, and which dropped files become attachments. The app turns the
+// returned `PromptEffect`s into microphone, upload and send calls and reports back what happened.
+
+/// Why voice input is off by itself. The card says so in one quiet line and works with the keyboard.
+public enum VoiceHint: Equatable, Sendable {
+    case microphoneDenied, noMicrophone, speechUnavailable, preparing, failed
+
+    public var text: String {
+        switch self {
+        case .microphoneDenied: "Voice is off: allow nodch in System Settings › Privacy › Microphone."
+        case .noMicrophone: "Voice is off: no microphone found."
+        case .speechUnavailable: "Voice isn’t available for this language."
+        case .preparing: "Voice is getting ready: macOS is loading the speech model."
+        case .failed: "Voice is off: the microphone didn’t start."
+        }
+    }
+}
+
+public enum VoiceState: Equatable, Sendable {
+    case off
+    /// Asked for: permission, speech model and microphone are being checked.
+    case starting
+    case listening
+    /// Return was pressed: the microphone is off, the last words are being finalized, then the prompt goes out.
+    case finishing
+    case unavailable(VoiceHint)
+
+    /// The microphone is on, or about to be.
+    public var isActive: Bool { self == .starting || self == .listening }
+}
+
+/// How the prompt came up: only the shortcut starts with the microphone on.
+public enum PromptOpenCause: Equatable, Sendable { case hotkey, click, drop }
+
+/// A file the person dropped, as the app found it on disk.
+public struct DroppedFile: Equatable, Sendable {
+    public var url: URL
+    public var isDirectory: Bool
+    public init(url: URL, isDirectory: Bool) { self.url = url; self.isDirectory = isDirectory }
+}
+
+/// One chip under the field: a dropped file on its way to Nod, uploaded, or refused with the reason.
+public struct PromptAttachment: Equatable, Sendable, Identifiable {
+    public enum Status: Equatable, Sendable {
+        case uploading
+        case ready(NodAttachment)
+        case failed(String)
+    }
+    public let id: Int
+    public let file: URL
+    public var status: Status
+    public var name: String { file.lastPathComponent }
+
+    public init(id: Int, file: URL, status: Status) { self.id = id; self.file = file; self.status = status }
+}
+
+public enum PromptEffect: Equatable, Sendable {
+    case startVoice
+    /// Off with the microphone. `finalize`: the transcriber still turns the audio it has into final words and then
+    /// reports `voiceFinished()`; otherwise whatever it still hears is dropped.
+    case stopVoice(finalize: Bool)
+    case upload(id: Int, file: URL)
+    case send(prompt: String, attachments: [NodAttachment])
+}
+
+public struct PromptDraft: Equatable, Sendable {
+    public static let maxAttachments = 10
+
+    /// What was typed plus the finalized transcript.
+    public private(set) var text = ""
+    /// The words still being recognized; they follow `text` in the field.
+    public private(set) var volatile = ""
+    public private(set) var voice: VoiceState = .off
+    public private(set) var attachments: [PromptAttachment] = []
+    /// A send is out; the field and Return wait for it.
+    public private(set) var sending = false
+    /// The last send failed: the text stays with this under it.
+    public private(set) var error: String?
+    /// A quiet line under the field: a drop that left something out, or why Return waits.
+    public private(set) var notice: String?
+    /// Names the send that is out. A discarded draft's send that finishes late carries an older token and is ignored.
+    public private(set) var sendToken = 0
+    private var nextID = 1
+
+    public init(text: String = "") { self.text = text }
+
+    /// What the field shows.
+    public var display: String { Self.join(text, volatile) }
+    public var ready: [NodAttachment] {
+        attachments.compactMap { if case .ready(let file) = $0.status { file } else { nil } }
+    }
+    public var uploading: Bool { attachments.contains { $0.status == .uploading } }
+    private var trimmed: String { display.trimmingCharacters(in: .whitespacesAndNewlines) }
+    /// Return would send (or, while listening, stop the microphone and then send).
+    public var canSend: Bool {
+        !sending && voice != .finishing && !uploading && (!trimmed.isEmpty || !ready.isEmpty)
+    }
+
+    // MARK: Opening and closing
+
+    /// The prompt came up. The shortcut turns the microphone on; a click or a drop leaves it as it is, which is off
+    /// for a prompt that was closed.
+    public mutating func open(_ cause: PromptOpenCause) -> [PromptEffect] {
+        error = nil
+        notice = nil
+        return cause == .hotkey ? startVoice() : []
+    }
+
+    /// The card closed, however that happened: the microphone goes off at once and the words heard so far stay.
+    /// A send that waited for the last words is called off; nothing goes out without the card.
+    public mutating func closed() -> [PromptEffect] {
+        let effects: [PromptEffect] = voice.isActive || voice == .finishing ? [.stopVoice(finalize: false)] : []
+        keepVolatile()
+        voice = .off
+        notice = nil
+        return effects
+    }
+
+    /// Escape: the microphone goes off and everything in the prompt is discarded.
+    public mutating func escape() -> [PromptEffect] {
+        let effects: [PromptEffect] = voice.isActive || voice == .finishing ? [.stopVoice(finalize: false)] : []
+        self = PromptDraft(continuing: nextID)
+        return effects
+    }
+
+    // MARK: Voice
+
+    public mutating func startVoice() -> [PromptEffect] {
+        guard !sending, voice != .finishing, !voice.isActive else { return [] }
+        voice = .starting
+        return [.startVoice]
+    }
+
+    /// The microphone button.
+    public mutating func toggleVoice() -> [PromptEffect] {
+        guard voice.isActive else { return startVoice() }
+        keepVolatile()
+        voice = .off
+        return [.stopVoice(finalize: false)]
+    }
+
+    public mutating func voiceStarted() {
+        if voice == .starting { voice = .listening }
+    }
+
+    /// The microphone or the speech model is not there: the prompt goes on with the keyboard.
+    public mutating func voiceUnavailable(_ hint: VoiceHint) {
+        guard voice.isActive else { return }
+        keepVolatile()
+        voice = .unavailable(hint)
+    }
+
+    /// Words from the transcriber. Volatile ones replace each other; final ones are kept.
+    public mutating func heard(_ words: String, final: Bool) {
+        guard voice == .listening || voice == .finishing else { return }
+        if final {
+            text = Self.join(text, words)
+            volatile = ""
+        } else {
+            volatile = words.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+    }
+
+    /// The person edited the field. The first keystroke while the microphone is on turns it off and keeps the
+    /// transcript, so they go on typing where the voice left off.
+    public mutating func typed(_ value: String) -> [PromptEffect] {
+        guard value != display, !sending, voice != .finishing else { return [] }
+        let effects: [PromptEffect] = voice.isActive ? [.stopVoice(finalize: false)] : []
+        if voice.isActive { voice = .off }
+        text = value
+        volatile = ""
+        if notice == Self.waitsForUploads { notice = nil }
+        return effects
+    }
+
+    // MARK: Sending
+
+    /// Return. While the microphone is on it goes off first and the prompt goes out once the last words are in
+    /// (`voiceFinished`). Never more than one send for one Return; nothing while an upload is still running.
+    public mutating func submit() -> [PromptEffect] {
+        guard !sending, voice != .finishing else { return [] }
+        if uploading { notice = Self.waitsForUploads; return [] }
+        // Before the first words show, the microphone may already have heard some: finalize, then send what came.
+        if voice.isActive {
+            voice = .finishing
+            return [.stopVoice(finalize: true)]
+        }
+        return send()
+    }
+
+    /// The transcriber has finalized after Return: now the prompt goes out.
+    public mutating func voiceFinished() -> [PromptEffect] {
+        guard voice == .finishing else { return [] }
+        keepVolatile()
+        voice = .off
+        return send()
+    }
+
+    private mutating func send() -> [PromptEffect] {
+        let prompt = trimmed, files = ready
+        guard !uploading, !prompt.isEmpty || !files.isEmpty else { return [] }
+        sending = true
+        sendToken = nextID
+        nextID += 1
+        error = nil
+        notice = nil
+        return [.send(prompt: prompt, attachments: files)]
+    }
+
+    /// Nod took the message: the prompt starts empty next time. False when no send was out (it was discarded).
+    /// `token`: the `sendToken` the send went out with; nil means the current one.
+    public mutating func sent(token: Int? = nil) -> Bool {
+        guard sending, token ?? sendToken == sendToken else { return false }
+        self = PromptDraft(continuing: nextID)
+        return true
+    }
+
+    public mutating func sendFailed(_ message: String, token: Int? = nil) {
+        guard sending, token ?? sendToken == sendToken else { return }
+        sending = false
+        error = message
+    }
+
+    // MARK: Attachments
+
+    public static let waitsForUploads = "Return sends once the files are uploaded."
+    public static let folderRefused = "Folders can’t be attached. Drop the files inside instead."
+
+    /// Which of the dropped files become chips: no folders, none twice, at most `maxAttachments` in all.
+    public static func accept(_ files: [DroppedFile], existing: [URL] = []) -> (accepted: [URL], notice: String?) {
+        var accepted: [URL] = [], seen = Set(existing.map(\.standardizedFileURL)), folders = 0, over = 0
+        for file in files {
+            if file.isDirectory { folders += 1; continue }
+            guard seen.insert(file.url.standardizedFileURL).inserted else { continue }
+            if existing.count + accepted.count < maxAttachments { accepted.append(file.url) } else { over += 1 }
+        }
+        var notes: [String] = []
+        if folders > 0 { notes.append(folderRefused) }
+        if over > 0 { notes.append("Up to \(maxAttachments) files: \(over) left out.") }
+        return (accepted, notes.isEmpty ? nil : notes.joined(separator: " "))
+    }
+
+    /// Files dropped on the island: a chip for each one that is accepted, uploading at once.
+    public mutating func drop(_ files: [DroppedFile]) -> [PromptEffect] {
+        guard !sending else { return [] }
+        let (accepted, notice) = Self.accept(files, existing: attachments.map(\.file))
+        self.notice = notice
+        error = nil
+        return accepted.map { url in
+            let id = nextID
+            nextID += 1
+            attachments.append(PromptAttachment(id: id, file: url, status: .uploading))
+            return .upload(id: id, file: url)
+        }
+    }
+
+    public mutating func uploaded(_ id: Int, as file: NodAttachment) {
+        guard let index = attachments.firstIndex(where: { $0.id == id }), attachments[index].status == .uploading else { return }
+        attachments[index].status = .ready(file)
+        if !uploading, notice == Self.waitsForUploads { notice = nil }
+    }
+
+    public mutating func uploadFailed(_ id: Int, reason: String) {
+        guard let index = attachments.firstIndex(where: { $0.id == id }), attachments[index].status == .uploading else { return }
+        attachments[index].status = .failed(reason)
+        if !uploading, notice == Self.waitsForUploads { notice = nil }
+    }
+
+    /// The chip's ×. An upload still running finishes on its own; its result is ignored.
+    public mutating func remove(_ id: Int) {
+        guard !sending else { return }
+        attachments.removeAll { $0.id == id }
+        if !uploading, notice == Self.waitsForUploads { notice = nil }
+    }
+
+    // MARK: Text
+
+    /// Appends recognized words to what is there, with one space between them.
+    public static func join(_ head: String, _ tail: String) -> String {
+        let tail = tail.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !tail.isEmpty else { return head }
+        guard let last = head.last else { return tail }
+        if last.isWhitespace || tail.first.map({ ",.;:!?)".contains($0) }) == true { return head + tail }
+        return head + " " + tail
+    }
+
+    private mutating func keepVolatile() {
+        text = display
+        volatile = ""
+    }
+
+    private init(continuing nextID: Int) { self.nextID = nextID }
+}

@@ -2,7 +2,7 @@ import Foundation
 import Synchronization
 import NodchCore
 
-private final class ClientStub: URLProtocol, @unchecked Sendable {
+final class ClientStub: URLProtocol, @unchecked Sendable {
     struct Reply: Sendable {
         var status = 200
         var mime = "application/json"
@@ -81,6 +81,9 @@ extension ClientChecks {
         }) ?? nil, let json = try JSONSerialization.jsonObject(with: body) as? [String: Any] {
             let answer = json["approvalAnswer"] as? [String: Any]
             check(json["replyToMessageId"] as? String == approval.messageID && answer?["approvalId"] as? String == approval.id && answer?["approved"] as? Bool == true && UUID(uuidString: json["clientMessageId"] as? String ?? "") != nil && json["text"] as? String == "Yes", "approval JSON uses message ID, approval ID, explicit decision and client UUID")
+            // Nod stores UUIDs lowercase and answers with them: an uppercase id would not match the stored message.
+            let id = json["clientMessageId"] as? String ?? ""
+            check(id == id.lowercased(), "client message ID is lowercase, as Nod returns it")
         } else { check(false, "approval body present") }
         session.disconnect()
 
@@ -114,7 +117,7 @@ extension ClientChecks {
             else { check(false, "401 offline") }
         }
         ClientStub.configure { _ in .init(error: URLError(.cannotConnectToHost)) }
-        do { try await session.send(prompt: "one explicit action"); check(false, "network send error") }
+        do { try await session.send(prompt: "one explicit action", attachments: []); check(false, "network send error") }
         catch NodClientError.network {
             check(ClientStub.requests.count == 1, "network failure never retries send")
             if case .offline = session.store.state { check(true, "unreachable maps to offline") }

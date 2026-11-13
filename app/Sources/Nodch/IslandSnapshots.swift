@@ -11,8 +11,10 @@ enum IslandSnapshots {
         var name: String
         var state: IslandState
         var open = false
-        var prompt: (text: String, error: String?)?
+        var prompt: PromptDraft?
         var hovering = false
+        var level: Float = 0
+        var drop = IslandDropZone.none
     }
 
     static let scenes: [Scene] = [
@@ -31,9 +33,14 @@ enum IslandSnapshots {
         Scene(name: "done", state: IslandSamples.done),
         Scene(name: "failed", state: IslandSamples.failed),
         Scene(name: "failed-open", state: IslandSamples.failed, open: true),
-        Scene(name: "prompt", state: .rest, open: true, prompt: ("", nil)),
-        Scene(name: "prompt-error", state: IslandSamples.working(), open: true,
-              prompt: ("Summarise my unread mail from today", "Nod didn’t accept the message: the server answered 503.")),
+        Scene(name: "prompt", state: .rest, open: true, prompt: PromptDraft()),
+        Scene(name: "prompt-error", state: IslandSamples.working(), open: true, prompt: IslandSamples.failedSend),
+        Scene(name: "prompt-listening", state: .rest, open: true, prompt: IslandSamples.listening, level: 0.6),
+        Scene(name: "prompt-voice-unavailable", state: .rest, open: true, prompt: IslandSamples.voiceDenied),
+        Scene(name: "prompt-attachments", state: .rest, open: true, prompt: IslandSamples.attachments),
+        Scene(name: "drop-near", state: .rest, drop: .near),
+        Scene(name: "drop-over", state: IslandSamples.working(), drop: .over),
+        Scene(name: "drop-open", state: .rest, open: true, prompt: IslandSamples.attachments, drop: .over),
     ].map { scene in
         var scene = scene
         if scene.name == "working-open" { scene.open = true }
@@ -82,9 +89,10 @@ enum IslandSnapshots {
         model.isOpen = scene.open
         if let prompt = scene.prompt {
             model.showsPrompt = true
-            model.prompt = prompt.text
-            model.promptError = prompt.error
+            model.draft = prompt
         }
+        model.voiceLevel = scene.level
+        model.dropZone = scene.drop
         var height: CGFloat = 200
         var view: IslandView?
         func layout() {

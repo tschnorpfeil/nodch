@@ -57,6 +57,44 @@ enum IslandSamples {
             + "Please read the attached one-pager before the call; it covers the cost comparison and the",
         bodyCut: true)
 
+    // Quick prompts, built through the same steps the app takes.
+
+    static var failedSend: PromptDraft {
+        var draft = PromptDraft(text: "Summarise my unread mail from today")
+        _ = draft.submit()
+        draft.sendFailed("Nod didn’t accept the message: the server answered 503.")
+        return draft
+    }
+
+    /// Opened with the shortcut: some words final, the latest still being recognized.
+    static var listening: PromptDraft {
+        var draft = PromptDraft()
+        _ = draft.open(.hotkey)
+        draft.voiceStarted()
+        draft.heard("Please summarize my unread email", final: true)
+        draft.heard("from today and flag anything urgent", final: false)
+        return draft
+    }
+
+    static var voiceDenied: PromptDraft {
+        var draft = PromptDraft()
+        _ = draft.open(.hotkey)
+        draft.voiceUnavailable(.microphoneDenied)
+        return draft
+    }
+
+    /// Three dropped files: one uploaded, one still uploading, one refused.
+    static var attachments: PromptDraft {
+        var draft = PromptDraft(text: "What do these say about Q4?")
+        let folder = URL(fileURLWithPath: "/Users/demo/Documents", isDirectory: true)
+        _ = draft.drop(["Q4 report.pdf", "receipts-november.zip", "Board deck final v7 (copy).key"].map {
+            DroppedFile(url: folder.appendingPathComponent($0), isDirectory: false)
+        })
+        draft.uploaded(1, as: NodAttachment(id: "demo-upload-1", name: "Q4 report.pdf", mimeType: "application/pdf", size: 482_133))
+        draft.uploadFailed(3, reason: "Choose a file between 1 byte and 90 MiB to upload.")
+        return draft
+    }
+
     static let failed = IslandState.failed(message: "The browser session expired while filling in the form. Sign in again in Nod, then retry from there.")
     static let offline = IslandState.offline(reason: "Nod isn’t running, or it doesn’t answer on localhost.")
     static let done = IslandState.done(summary: "Expense report sent to finance")
@@ -68,8 +106,8 @@ final class DemoActions: NodActions {
     weak var store: IslandStore?
     var failNextSend = true
 
-    func send(prompt: String) async throws {
-        print("demo: send(prompt: \"\(prompt)\")")
+    func send(prompt: String, attachments: [NodAttachment]) async throws {
+        print("demo: send(prompt: \"\(prompt)\", attachments: \(attachments.map(\.name)))")
         try await Task.sleep(for: .milliseconds(450))
         // The first send fails once, so the inline error can be seen; the next one goes through.
         if failNextSend {
@@ -84,6 +122,13 @@ final class DemoActions: NodActions {
         try await Task.sleep(for: .milliseconds(400))
         store?.state = approved ? IslandSamples.working(step: "Doing what you approved", site: nil, title: approval.title, seconds: 0)
                                 : .done(summary: "Declined: \(approval.title)")
+    }
+
+    func upload(file: URL) async throws -> NodAttachment {
+        print("demo: upload(file: \(file.lastPathComponent))")
+        try await Task.sleep(for: .milliseconds(350))
+        let size = (try? file.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+        return NodAttachment(id: UUID().uuidString.lowercased(), name: file.lastPathComponent, mimeType: "application/octet-stream", size: size)
     }
 
     func stop() async throws {

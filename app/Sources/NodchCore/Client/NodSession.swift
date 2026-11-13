@@ -130,8 +130,13 @@ import Foundation
         store.state = .offline(reason: error.localizedDescription)
     }
 
-    public func send(prompt: String) async throws {
-        do { _ = try await client.send(prompt: prompt); refreshAfterChange() }
+    public func send(prompt: String, attachments: [NodAttachment]) async throws {
+        do { _ = try await client.send(prompt: prompt, attachments: attachments); refreshAfterChange() }
+        catch { handleActionError(error); throw error }
+    }
+
+    public func upload(file: URL) async throws -> NodAttachment {
+        do { return try await client.upload(file: file) }
         catch { handleActionError(error); throw error }
     }
 

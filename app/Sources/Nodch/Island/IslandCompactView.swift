@@ -36,7 +36,8 @@ struct IslandCompactView: View {
     }
 
     private func accessibilityLabel(_ shown: IslandModel.Shown) -> String {
-        switch shown.tone {
+        if shown.drop != .none { return "Drop files to attach them to a prompt" }
+        return switch shown.tone {
         case .rest: "nodch. Open the quick prompt"
         case .needsYou: "Nod needs you: \(shown.line)"
         default: "Nod, \(IslandPresentation.heading(shown.tone).lowercased()): \(shown.line)"
@@ -45,13 +46,19 @@ struct IslandCompactView: View {
 
     private func leading(_ shown: IslandModel.Shown) -> some View {
         HStack(spacing: IslandMetrics.glyphGap) {
-            if shown.wing.showsGlyph {
+            if shown.drop != .none {
+                Image(systemName: "arrow.down.doc.fill").font(.system(size: IslandMetrics.glyph - 2, weight: .semibold))
+                    .foregroundStyle(shown.drop == .over ? IslandStyle.accent : IslandStyle.white(IslandStyle.secondary))
+                    .frame(width: IslandMetrics.glyph, height: IslandMetrics.glyph)
+                    .accessibilityHidden(true)
+            } else if shown.wing.showsGlyph {
                 IslandGlyph(tone: shown.tone, size: IslandMetrics.glyph)
             }
             if shown.wing.showsLine, !shown.line.isEmpty {
                 Text(shown.line)
                     .font(IslandStyle.line)
-                    .foregroundStyle(IslandStyle.white(shown.tone == .working ? IslandStyle.primary - 0.1 : IslandStyle.primary))
+                    .foregroundStyle(shown.drop == .over ? IslandStyle.accent
+                                     : IslandStyle.white(shown.tone == .working ? IslandStyle.primary - 0.1 : IslandStyle.primary))
                     .lineLimit(1).truncationMode(.tail)
                     .contentTransition(.opacity)
                     .transition(.opacity)
