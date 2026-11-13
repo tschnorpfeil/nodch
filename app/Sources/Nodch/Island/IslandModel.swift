@@ -26,8 +26,12 @@ import Observation
     private(set) var stopping = false
     /// A failed Approve, Decline or Stop, shown in the card until the next try or another approval.
     var actionError: String?
-    /// When the current approval first showed; Approve and Decline wait out `IslandPresentation.answerGuard`.
-    var approvalShownAt = Date.distantPast
+    /// When the current approval or question first showed; Approve, Decline and the choices wait out
+    /// `IslandPresentation.answerGuard`. Set through `startAnswerGuard`.
+    private(set) var approvalShownAt = Date.distantPast
+    /// The guard still holds: those buttons show dimmed and take nothing.
+    private(set) var answerGuarded = false
+    @ObservationIgnored private var guardEnd: Task<Void, Never>?
     /// Raised to put the keyboard in the prompt field once the card can take it.
     var focusToken = 0
     var layout = Layout()
@@ -111,6 +115,21 @@ import Observation
                 actionError = (approved ? "Couldn’t approve: " : "Couldn’t decline: ") + Self.describe(error)
             }
             answering = nil
+        }
+    }
+
+    /// The card shows a new decision (or shows it again): the guard starts at `shownAt`. The buttons come back by
+    /// themselves when it ends; nobody has to move the pointer.
+    func startAnswerGuard(at shownAt: Date = Date()) {
+        approvalShownAt = shownAt
+        guardEnd?.cancel()
+        let remaining = IslandPresentation.answerGuardRemaining(shownFor: Date().timeIntervalSince(shownAt))
+        answerGuarded = remaining > 0
+        guard remaining > 0 else { return }
+        guardEnd = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(remaining))
+            guard !Task.isCancelled else { return }
+            self?.answerGuarded = false
         }
     }
 

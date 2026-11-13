@@ -30,5 +30,11 @@ extension IslandChecks {
               "keys: a question on a card the person opened takes the keyboard")
         check(!P.questionTakesKey(open: .approval), "keys: a question on a card that opened by itself leaves the keyboard alone")
         check(!P.questionTakesKey(open: nil), "keys: a question on a closed card leaves the keyboard alone")
+
+        // The click guard's state, for the dimmed buttons: on while answers are refused, off exactly when they count.
+        check(P.answerGuardRemaining(shownFor: 0) == P.answerGuard && P.answerGuardRemaining(shownFor: 0.3) > 0
+              && !P.acceptsAnswer(shownFor: 0.3), "keys: the guard holds, and says so, right after a card appears")
+        check(P.answerGuardRemaining(shownFor: P.answerGuard) == 0 && P.acceptsAnswer(shownFor: P.answerGuard)
+              && P.answerGuardRemaining(shownFor: 60) == 0, "keys: the guard ends exactly when answers count")
     }
 }

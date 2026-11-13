@@ -40,6 +40,9 @@ public enum IslandPresentation {
 
     public static func acceptsAnswer(shownFor age: TimeInterval) -> Bool { age >= answerGuard }
 
+    /// How much longer the guard holds; 0 once the card takes answers. The buttons show dimmed until then.
+    public static func answerGuardRemaining(shownFor age: TimeInterval) -> TimeInterval { max(0, answerGuard - age) }
+
     /// `doneAge`: seconds since the island first showed the current `.done`; nil if it has not shown it yet.
     public static func tone(_ state: IslandState, doneAge: TimeInterval? = nil) -> IslandTone {
         switch state {

@@ -45,7 +45,7 @@ final class IslandController {
         presenter.view.onPanelShown = { [weak self] in
             guard let self else { return }
             // Reopening keeps the SwiftUI card alive, so its onAppear does not run: restart the click guard here.
-            if model.approval != nil, !model.showsPrompt { model.approvalShownAt = Date() }
+            if model.approval != nil, !model.showsPrompt { model.startAnswerGuard() }
             guard model.showsPrompt else { return }
             model.focusToken += 1
         }
@@ -111,7 +111,7 @@ final class IslandController {
         }
         let newQuestion = IslandPresentation.newQuestion(from: old, to: new)
         if IslandPresentation.waitingID(old) != IslandPresentation.waitingID(new) {
-            model.actionError = nil; model.approvalShownAt = Date(); model.picked = []; model.highlightedChoice = nil
+            model.actionError = nil; model.startAnswerGuard(); model.picked = []; model.highlightedChoice = nil
         }
         if case .working = new {} else if case .working = old { model.actionError = nil }
         // An open card turns into the answer (with the prompt under it) when Nod finishes or asks, so it stays at rest.

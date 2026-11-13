@@ -331,7 +331,8 @@ struct IslandAnswer: View {
                 VStack(alignment: .leading, spacing: 6) {
                     ForEach(question.choices) { choice in choiceButton(choice, multiple: question.multiple) }
                 }
-                .disabled(model.draft.sending)
+                .disabled(model.draft.sending || model.answerGuarded)
+                .opacity(model.answerGuarded ? 0.55 : 1)
                 if question.multiple {
                     HStack {
                         Spacer(minLength: 0)
@@ -694,8 +695,8 @@ struct IslandApprovalCard: View {
         }
         .animation(IslandStyle.fade, value: model.actionError)
         // The click guard runs from when the card is on screen, also after the prompt hid it or it was folded away.
-        .onAppear { model.approvalShownAt = Date() }
-        .onChange(of: approval.id) { model.approvalShownAt = Date() }
+        .onAppear { model.startAnswerGuard() }
+        .onChange(of: approval.id) { model.startAnswerGuard() }
     }
 
     /// Title, question, fields and body scroll together in what the display leaves after the button row, so the
@@ -762,7 +763,8 @@ struct IslandApprovalCard: View {
             }
         }
         .buttonStyle(IslandButtonStyle(prominent: approved))
-        .disabled(busy != nil)
+        // Dimmed while the click guard holds, so an early click is visibly not taken.
+        .disabled(busy != nil || model.answerGuarded)
         .accessibilityLabel(approved ? "Approve: \(approval.title)" : "Decline: \(approval.title)")
     }
 }
