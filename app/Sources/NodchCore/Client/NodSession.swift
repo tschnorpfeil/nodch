@@ -10,20 +10,26 @@ import Foundation
     private var refreshTask: Task<Void, Never>?
     private var fetchTask: Task<NodState, Error>?
     private var doneTask: Task<Void, Never>?
+    private var retryWait: Task<Void, Never>?
     private var refreshPending = false
     private var generation = 0
     private let reconnectBase: TimeInterval
     private let reconnectCap: TimeInterval
+    private let retryBase: TimeInterval
+    private let retryCap: TimeInterval
 
     public init(client: NodClient, store: IslandStore = IslandStore(), doneDuration: TimeInterval = 3,
-                reconnectBase: TimeInterval = 0.5, reconnectCap: TimeInterval = 15) {
+                reconnectBase: TimeInterval = 0.5, reconnectCap: TimeInterval = 15,
+                retryBase: TimeInterval = 1, retryCap: TimeInterval = 30) {
         self.client = client; self.store = store; self.mapper = NodStateMapper(doneDuration: doneDuration)
         self.reconnectBase = max(0.01, reconnectBase)
         self.reconnectCap = max(self.reconnectBase, reconnectCap)
+        self.retryBase = max(0.01, retryBase)
+        self.retryCap = max(self.retryBase, retryCap)
         store.actions = self
     }
 
-    deinit { connectionTask?.cancel(); refreshTask?.cancel(); fetchTask?.cancel(); doneTask?.cancel() }
+    deinit { connectionTask?.cancel(); refreshTask?.cancel(); retryWait?.cancel(); fetchTask?.cancel(); doneTask?.cancel() }
 
     /// Start once after constructing the session; disconnect when its owner stops observing.
     public func start() {
@@ -58,6 +64,7 @@ import Foundation
         generation += 1
         connectionTask?.cancel(); connectionTask = nil
         refreshTask?.cancel(); refreshTask = nil
+        retryWait?.cancel(); retryWait = nil
         fetchTask?.cancel(); fetchTask = nil
         doneTask?.cancel(); doneTask = nil
         refreshPending = false
@@ -88,15 +95,30 @@ import Foundation
         _ = try await task.value
     }
 
+    /// A failed fetch is retried with backoff (retryBase doubling up to retryCap), because the event
+    /// stream may stay connected and quiet. A new request or event cuts the wait short. This also covers
+    /// 401 and missing credentials: Nod may restart with a new key, and the cap keeps it to a few GETs a minute.
     private func requestRefresh() {
         refreshPending = true
+        retryWait?.cancel()
         guard refreshTask == nil else { return }
         let currentGeneration = generation
         refreshTask = Task { [weak self] in
             await Task.yield()
-            while !Task.isCancelled, let self, self.refreshPending {
+            var delay = self?.retryBase ?? 1
+            while !Task.isCancelled, let self, self.generation == currentGeneration, self.refreshPending {
                 self.refreshPending = false
-                do { try await self.refresh() } catch { }
+                do { try await self.refresh(); delay = self.retryBase }
+                catch {
+                    if error is CancellationError || self.refreshPending { continue }
+                    let wait = Task<Void, Never> { _ = try? await Task.sleep(for: .seconds(delay)) }
+                    self.retryWait = wait
+                    await wait.value
+                    if self.retryWait == wait { self.retryWait = nil }
+                    // Slept the full time: try again. Cancelled: a new request already set refreshPending.
+                    if !wait.isCancelled { self.refreshPending = true }
+                    delay = min(self.retryCap, delay * 2)
+                }
             }
             if self?.generation == currentGeneration { self?.refreshTask = nil }
         }
