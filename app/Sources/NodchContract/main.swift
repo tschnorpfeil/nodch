@@ -56,11 +56,11 @@ import NodchCore
         .appendingPathComponent(".build/contract-upload-\(UUID().uuidString)")
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: directory) }
-    let file = directory.appendingPathComponent("contract.txt")
+    let file = directory.appendingPathComponent("Übersicht – März.txt")
     let contents = "Nodch attachment contract."
     try contents.write(to: file, atomically: true, encoding: .utf8)
     let attachment = try await session.upload(file: file)
-    try require(UUID(uuidString: attachment.id) != nil && attachment.name == "contract.txt" &&
+    try require(UUID(uuidString: attachment.id) != nil && attachment.name == "Übersicht – März.txt" &&
                 attachment.mimeType == "text/plain" && attachment.size == contents.utf8.count,
                 "upload text file -> Artifact with id, name, MIME and size")
     let submission = try await client.send(prompt: "", attachments: [attachment])
