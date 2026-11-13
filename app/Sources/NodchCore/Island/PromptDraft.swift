@@ -105,6 +105,8 @@ public struct PromptDraft: Equatable, Sendable {
         attachments.compactMap { if case .ready(let file) = $0.status { file } else { nil } }
     }
     public var uploading: Bool { attachments.contains { $0.status == .uploading } }
+    /// Escape would throw something away: the hints say "discard" then, "close" otherwise.
+    public var discardsOnEscape: Bool { !display.isEmpty || !attachments.isEmpty }
     private var trimmed: String { display.trimmingCharacters(in: .whitespacesAndNewlines) }
     /// Return would send (or, while listening, stop the microphone and then send).
     public var canSend: Bool {

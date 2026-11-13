@@ -103,6 +103,13 @@ public enum IslandPresentation {
         return choices[min(max(index + (down ? 1 : -1), 0), choices.count - 1)]
     }
 
+    /// The quiet key line under the prompt. `discards`: Escape would throw away words or files.
+    public static func promptHints(question: NodQuestion?, discards: Bool) -> String {
+        let escape = discards ? "esc discard" : "esc close"
+        guard let question, !question.choices.isEmpty else { return "↩ send  ·  " + escape }
+        return (question.multiple ? "↑↓ navigate  ·  ↩ select  ·  Send to answer" : "↑↓ navigate  ·  ↩ answer") + "  ·  " + escape
+    }
+
     /// The short name of the state, for the card's header and VoiceOver.
     public static func heading(_ tone: IslandTone) -> String {
         switch tone {

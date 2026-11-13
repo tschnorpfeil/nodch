@@ -198,8 +198,8 @@ struct IslandPromptCard: View {
                 .padding(.trailing, 6)
             }
             .accessibilityLabel("Ask Nod")
-            .accessibilityHint(draft.voice == .listening ? "Listening. Typing takes over, Return sends, Escape discards"
-                                                        : "Return sends, Escape discards")
+            .accessibilityHint((draft.voice == .listening ? "Listening. Typing takes over, Return sends, " : "Return sends, ")
+                               + (draft.discardsOnEscape ? "Escape discards" : "Escape closes"))
     }
 
     /// What was heard so far, the words still being recognized dimmed after it, or where the microphone is at.
@@ -267,13 +267,9 @@ struct IslandPromptCard: View {
             IslandErrorLine(text: error)
         } else if let notice = draft.notice {
             footnote(notice, symbol: "info.circle")
-        } else if let question = model.asking?.question, !question.choices.isEmpty {
-            Text(question.multiple ? "↑↓ navigate  ·  ↩ select  ·  Send to answer  ·  esc close" : "↑↓ navigate  ·  ↩ answer  ·  esc close")
-                .font(IslandStyle.caption).foregroundStyle(IslandStyle.white(IslandStyle.tertiary))
-                .accessibilityHidden(true)
         } else {
-            Text("↩ send  ·  esc close").font(IslandStyle.caption)
-                .foregroundStyle(IslandStyle.white(IslandStyle.tertiary))
+            Text(IslandPresentation.promptHints(question: model.asking?.question, discards: draft.discardsOnEscape))
+                .font(IslandStyle.caption).foregroundStyle(IslandStyle.white(IslandStyle.tertiary))
                 .accessibilityHidden(true)
         }
     }
