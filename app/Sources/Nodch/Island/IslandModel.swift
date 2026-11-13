@@ -90,8 +90,6 @@ import Observation
     var shownAnswer: NodAnswer? { IslandPresentation.shownAnswer(store.answer, state: store.state) }
     /// Choices ticked on a question that takes several.
     var picked: Set<String> = []
-    /// A pick is on its way to Nod.
-    private(set) var answeringQuestion = false
 
     static let notConnected = "nodch isn’t connected to Nod yet."
 
@@ -175,34 +173,35 @@ import Observation
 
     /// A choice on Nod's question. On a single-choice question the click is the answer; otherwise it ticks the choice.
     func pick(_ choice: NodQuestion.Choice) {
-        guard let asked = asking, let question = asked.question, !answeringQuestion else { return }
+        guard let asked = asking, let question = asked.question, !draft.sending else { return }
         // A card that just appeared by itself ignores clicks for a moment, like an approval.
         guard IslandPresentation.acceptsAnswer(shownFor: Date().timeIntervalSince(approvalShownAt)) else { return }
-        guard question.multiple else { answer(asked, choices: [choice], text: ""); return }
+        guard question.multiple else { answer(asked, choices: [choice], withWords: false); return }
         if picked.contains(choice.id) { picked.remove(choice.id) } else { picked.insert(choice.id) }
     }
 
     /// Sends the ticked choices of a multiple-choice question, with the words in the field if there are any.
     func sendPicks() {
         guard let asked = asking, let question = asked.question, !picked.isEmpty else { return }
-        answer(asked, choices: question.choices.filter { picked.contains($0.id) }, text: draft.display)
+        answer(asked, choices: question.choices.filter { picked.contains($0.id) }, withWords: true)
     }
 
-    /// One answer to Nod's question, from one click. The field's words go with it and are cleared once Nod has it.
-    private func answer(_ asked: NodAnswer, choices: [NodQuestion.Choice], text: String) {
-        guard let actions = store.actions else { draft.sendFailed(Self.notConnected); return }
-        guard !answeringQuestion, !draft.sending else { return }
-        answeringQuestion = true
-        let keepsText = !text.isEmpty
+    /// One answer to Nod's question, from one click, through the draft's send lifecycle: nothing else goes out while it
+    /// is on its way, a failure shows under the field, and only the words that went with it are cleared.
+    private func answer(_ asked: NodAnswer, choices: [NodQuestion.Choice], withWords: Bool) {
+        guard let effects = draft.answerChoice() else { return }
+        perform(effects)
+        let token = draft.sendToken
+        let text = withWords ? draft.display.trimmingCharacters(in: .whitespacesAndNewlines) : ""
+        guard let actions = store.actions else { draft.sendFailed(Self.notConnected, token: token); return }
         Task {
             do {
                 try await actions.answer(question: asked, choices: choices, text: text)
                 picked = []
-                if keepsText { perform(draft.escape()) }
+                if text.isEmpty { draft.answeredKeepingText(token: token) } else if draft.sent(token: token) { onSent() }
             } catch {
-                draft.sendFailed(Self.describe(error))
+                draft.sendFailed(Self.describe(error), token: token)
             }
-            answeringQuestion = false
         }
     }
 

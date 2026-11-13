@@ -108,6 +108,8 @@ final class IslandController {
             model.actionError = nil; model.approvalShownAt = Date(); model.picked = []
         }
         if case .working = new {} else if case .working = old { model.actionError = nil }
+        // An open card turns into the answer (with the prompt under it) when Nod finishes or asks, so it stays at rest.
+        if model.isOpen, model.tone == .done || model.asking != nil { model.showsPrompt = true }
         switch IslandPresentation.reaction(from: old, to: new, open: openCause) {
         case .reveal: open(.approval)
         case .conceal: presenter.close()

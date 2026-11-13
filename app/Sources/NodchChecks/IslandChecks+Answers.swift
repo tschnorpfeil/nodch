@@ -30,6 +30,28 @@ extension IslandChecks {
         check(P.shownAnswer(old, state: .rest, now: now) == nil, "answers: an old answer leaves the prompt empty")
         check(P.shownAnswer(nil, state: asks, now: now) == asked, "answers: an open question shows however old it is")
 
+        // A click on a choice goes out like a send (review S1–S3).
+        var draft = PromptDraft(text: "und bitte vormittags")
+        check(draft.answerChoice() == [] && draft.sending, "answers: a choice click locks the draft like a send")
+        check(draft.submit().isEmpty && draft.answerChoice() == nil, "answers: Return or a second click sends nothing while a choice is out")
+        let token = draft.sendToken
+        draft.answeredKeepingText(token: token)
+        check(!draft.sending && draft.text == "und bitte vormittags", "answers: a choice without the words gives the field back with them")
+        _ = draft.answerChoice()
+        draft.sendFailed("Nod rejected it", token: draft.sendToken)
+        check(draft.error == "Nod rejected it" && !draft.sending, "answers: a rejected choice says why under the field")
+        _ = draft.answerChoice()
+        let earlier = draft.sendToken
+        _ = draft.escape()
+        _ = draft.typed("neue Frage")
+        check(!draft.sent(token: earlier) && draft.display == "neue Frage", "answers: a late answer never clears a newer draft")
+        var listening = PromptDraft()
+        _ = listening.open(.hotkey)
+        listening.voiceStarted()
+        listening.heard("morgen", final: false)
+        check(listening.answerChoice() == [.stopVoice(finalize: false)] && listening.voice == .off && listening.text == "morgen",
+              "answers: a choice turns the microphone off and keeps its words")
+
         // The mapper turns an open question into `.asks` once no turn runs.
         let id = "00000000-0000-4000-8000-0000000000"
         let json = """

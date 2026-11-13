@@ -254,18 +254,18 @@ struct IslandAnswer: View {
                 VStack(alignment: .leading, spacing: 6) {
                     ForEach(question.choices) { choice in choiceButton(choice, multiple: question.multiple) }
                 }
-                .disabled(model.answeringQuestion || model.draft.sending)
+                .disabled(model.draft.sending)
                 if question.multiple {
                     HStack {
                         Spacer(minLength: 0)
                         Button { model.sendPicks() } label: {
                             HStack(spacing: 6) {
-                                if model.answeringQuestion { ProgressView().controlSize(.mini) }
+                                if model.draft.sending { ProgressView().controlSize(.mini) }
                                 Text(model.draft.display.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Send" : "Send with my words")
                             }
                         }
                         .buttonStyle(IslandButtonStyle(prominent: true))
-                        .disabled(model.picked.isEmpty || model.answeringQuestion || model.draft.sending)
+                        .disabled(model.picked.isEmpty || model.draft.sending)
                     }
                 }
             }
