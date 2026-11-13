@@ -16,5 +16,6 @@ let package = Package(
         .executableTarget(name: "Nodch", dependencies: ["NodchCore"]),
         // Without Xcode there is no XCTest: checks run as `swift run NodchChecks`.
         .executableTarget(name: "NodchChecks", dependencies: ["NodchCore"]),
+        .executableTarget(name: "NodchContract", dependencies: ["NodchCore"]),
     ]
 )
