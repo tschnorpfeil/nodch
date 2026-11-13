@@ -180,16 +180,17 @@ final class IslandController {
         if layout != model.layout { model.layout = layout }
     }
 
-    /// At the notch when a display has one; otherwise below the menu bar of the display in use.
+    /// On the display under the pointer: at its notch when it has one, otherwise below its menu bar.
     static func placement() -> IslandPlacement? {
         let screens = NSScreen.screens
-        for screen in screens {
-            if let housing = IslandGeometry.housing(screen: screen.frame, leftArea: screen.auxiliaryTopLeftArea,
-                                                    rightArea: screen.auxiliaryTopRightArea, topInset: screen.safeAreaInsets.top) {
-                return .notch(housing: housing, screen: screen.frame)
-            }
+        let main = NSScreen.main.flatMap { main in screens.firstIndex { $0 == main } } ?? (screens.isEmpty ? nil : 0)
+        guard let index = IslandGeometry.screenIndex(frames: screens.map(\.frame), pointer: NSEvent.mouseLocation, fallback: main)
+        else { return nil }
+        let screen = screens[index]
+        if let housing = IslandGeometry.housing(screen: screen.frame, leftArea: screen.auxiliaryTopLeftArea,
+                                                rightArea: screen.auxiliaryTopRightArea, topInset: screen.safeAreaInsets.top) {
+            return .notch(housing: housing, screen: screen.frame)
         }
-        guard let screen = NSScreen.main ?? screens.first else { return nil }
         return IslandGeometry.placement(screen: screen.frame, visible: screen.visibleFrame, leftArea: nil, rightArea: nil, topInset: 0)
     }
 

@@ -11,6 +11,15 @@ extension IslandChecks {
     static let externalVisible = CGRect(x: -2560, y: 0, width: 2560, height: 1416)
 
     static func geometry() {
+        // Which display: the one under the pointer (laptop with notch on the left, external display on the right).
+        let laptop = CGRect(x: 0, y: 0, width: 1512, height: 982), monitor = CGRect(x: 1512, y: 0, width: 2560, height: 1440)
+        check(IslandGeometry.screenIndex(frames: [laptop, monitor], pointer: CGPoint(x: 2400, y: 700), fallback: 0) == 1,
+              "geometry: the island goes to the display under the pointer, not to the notch elsewhere")
+        check(IslandGeometry.screenIndex(frames: [laptop, monitor], pointer: CGPoint(x: 700, y: 982), fallback: 1) == 0,
+              "geometry: a pointer on the top edge (in the menu bar) still counts")
+        check(IslandGeometry.screenIndex(frames: [laptop, monitor], pointer: CGPoint(x: -50, y: 50), fallback: 1) == 1
+              && IslandGeometry.screenIndex(frames: [], pointer: .zero, fallback: nil) == nil,
+              "geometry: without a display under the pointer the main display is used")
         // Notch detection.
         let housing = IslandGeometry.housing(screen: laptop, leftArea: laptopLeft, rightArea: laptopRight, topInset: 32)
         check(housing == CGRect(x: 655, y: 950, width: 202, height: 32), "geometry: housing from the auxiliary areas")
