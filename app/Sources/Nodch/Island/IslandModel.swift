@@ -96,6 +96,7 @@ import Observation
     var shownAnswer: NodAnswer? { IslandPresentation.shownAnswer(store.answer, state: store.state) }
     /// Choices ticked on a question that takes several.
     var picked: Set<String> = []
+    var highlightedChoice: String?
 
     static let notConnected = "nodch isn’t connected to Nod yet."
 
@@ -141,7 +142,7 @@ import Observation
     }
 
     /// The field changed under the person's hands (not by the transcriber).
-    func typed(_ value: String) { perform(draft.typed(value)) }
+    func typed(_ value: String) { highlightedChoice = nil; perform(draft.typed(value)) }
     func toggleVoice() { perform(draft.toggleVoice()) }
     /// Return: sends once, after the microphone is off. On success the card closes; on failure the text stays with
     /// the error under it.
@@ -196,6 +197,20 @@ import Observation
         }
     }
 
+    /// Arrow keys only move the highlight. Return acts like a click on the highlighted choice.
+    func questionKey(_ key: UInt16) -> Bool {
+        guard let question = asking?.question, !draft.sending, draft.voice != .finishing else { return false }
+        if key == 125 || key == 126 {
+            guard !question.choices.isEmpty else { return false }
+            highlightedChoice = IslandPresentation.nextChoice(highlightedChoice, choices: question.choices.map(\.id), down: key == 125)
+            return true
+        }
+        guard key == 36 || key == 76, let id = highlightedChoice,
+              let choice = question.choices.first(where: { $0.id == id }) else { return false }
+        pick(choice)
+        return true
+    }
+
     /// A choice on Nod's question. On a single-choice question the click is the answer; otherwise it ticks the choice.
     func pick(_ choice: NodQuestion.Choice) {
         guard let asked = asking, let question = asked.question, !draft.sending else { return }
@@ -222,7 +237,7 @@ import Observation
         Task {
             do {
                 try await actions.answer(question: asked, choices: choices, text: text)
-                picked = []
+                if asking?.id == asked.id { picked = [] }
                 if text.isEmpty { draft.answeredKeepingText(token: token) } else if draft.sent(token: token) { onSent() }
             } catch {
                 draft.sendFailed(Self.describe(error), token: token)
@@ -240,7 +255,7 @@ import Observation
             do {
                 if let asked {
                     try await actions.answer(question: asked, choices: asked.question?.multiple == true ? choices : [], text: prompt)
-                    picked = []
+                    if asking?.id == asked.id { picked = [] }
                 } else {
                     try await actions.send(prompt: prompt, attachments: attachments)
                 }

@@ -191,6 +191,7 @@ final class IslandPresenter: NSObject {
     var onIdle: (() -> Void)?
     var isIdle: Bool { !isPresented && opening.isSettled && opening.value == 0 && height.isSettled }
     var onEscape: (() -> Void)?
+    var onQuestionKey: ((UInt16) -> Bool)?
     /// Whether a click outside the card closes it (not for a card that opened by itself for an approval).
     var closesOnOutsideClick: () -> Bool = { true }
     var reduceMotion: () -> Bool = { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
@@ -419,6 +420,17 @@ final class IslandPresenter: NSObject {
         removeMonitors()
         let clicks: NSEvent.EventTypeMask = [.leftMouseDown, .rightMouseDown, .otherMouseDown]
         let local = NSEvent.addLocalMonitorForEvents(matching: clicks.union(.keyDown)) { [weak self] event in
+            if event.type == .keyDown, let self, event.window === self.panel,
+               self.view.model.showsPrompt, self.panel.isKeyWindow,
+               let editor = self.panel.firstResponder as? NSTextView, editor.isFieldEditor, !editor.hasMarkedText(),
+               event.modifierFlags.intersection([.command, .control, .option, .shift]).isEmpty,
+               MainActor.assumeIsolated({
+                   if event.isARepeat, (event.keyCode == 36 || event.keyCode == 76),
+                      self.view.model.asking != nil, self.view.model.highlightedChoice != nil { return true }
+                   return self.onQuestionKey?(event.keyCode) ?? false
+               }) {
+                return nil
+            }
             let escape = event.type == .keyDown && event.keyCode == 53 && event.window === self?.panel
             if event.type == .keyDown && !escape { return event }
             let inPanel = event.window === self?.panel
