@@ -78,8 +78,9 @@ enum IslandSnapshots {
                 }
             }
         }
+        written += await SettingsSnapshots.run(into: folder)
         print("\(written) snapshots in \(folder.path)")
-        return written == scenes.count * 2 ? 0 : 1
+        return written == scenes.count * 2 + SettingsSnapshots.scenes.count * 2 ? 0 : 1
     }
 
     private static func render(_ scene: Scene, notch: Bool, to file: URL) async -> Bool {

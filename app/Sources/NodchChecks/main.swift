@@ -6,6 +6,7 @@ check(IslandStore().state == .offline(reason: "Not connected"), "store starts of
 await ClientChecks.run()
 await IslandChecks.run()
 MarkdownChecks.run()
+await SettingsChecks.run()
 
 print(failures == 0 ? "All checks passed." : "\(failures) check(s) failed.")
 exit(failures == 0 ? 0 : 1)

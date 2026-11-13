@@ -125,11 +125,13 @@ import Foundation
     }
 
     /// After a change: a fetch already in flight predates it, so wait that out and then fetch again.
-    private func refreshAfterChange() {
+    private func refreshAfterChange(_ started: Int) {
+        guard started == generation else { return }
         let older = fetchTask
         Task { [weak self] in
             if let older { _ = try? await older.value }
-            self?.requestRefresh()
+            guard let self, self.generation == started else { return }
+            self.requestRefresh()
         }
     }
 
@@ -150,45 +152,62 @@ import Foundation
 
     private func show(_ error: Error) {
         doneTask?.cancel(); doneTask = nil
-        store.state = .offline(reason: error.localizedDescription)
+        // Plain words that name the address nodch tried, not environment variables.
+        store.state = .offline(reason: ConnectionCheck(error: error).message(address: client.configuration.baseURL))
     }
 
+    // Every mutation remembers the generation it started in. One that comes back after `disconnect` (Settings saved
+    // another server) neither refreshes nor writes the shared store: the new session owns it now.
+
     public func send(prompt: String, attachments: [NodAttachment]) async throws {
-        do { _ = try await client.send(prompt: prompt, attachments: attachments); refreshAfterChange() }
-        catch { handleActionError(error); throw error }
+        let started = generation
+        do { _ = try await client.send(prompt: prompt, attachments: attachments); refreshAfterChange(started) }
+        catch { handleActionError(error, started); throw error }
     }
 
     public func upload(file: URL) async throws -> NodAttachment {
-        do { return try await client.upload(file: file) }
-        catch { handleActionError(error); throw error }
+        let started = generation
+        let attachment: NodAttachment
+        do { attachment = try await client.upload(file: file) }
+        catch { handleActionError(error, started); throw error }
+        // Uploaded to the server nodch has just left: the new one doesn't know it, so it never joins a prompt.
+        guard started == generation else {
+            throw NodClientError.configuration("nodch switched to another Nod while this file was uploading. Drop it again.")
+        }
+        return attachment
     }
 
     public func answer(approval: PendingApproval, approved: Bool) async throws {
-        do { _ = try await client.answer(approval: approval, approved: approved); refreshAfterChange() }
-        catch let error as NodClientError { try await handleAnswerError(error) }
+        let started = generation
+        do { _ = try await client.answer(approval: approval, approved: approved); refreshAfterChange(started) }
+        catch let error as NodClientError { try await handleAnswerError(error, started) }
     }
 
     public func answer(question: NodAnswer, choices: [NodQuestion.Choice], text: String) async throws {
-        do { _ = try await client.answer(question: question, choices: choices, text: text); refreshAfterChange() }
-        catch let error as NodClientError { try await handleAnswerError(error) }
+        let started = generation
+        do { _ = try await client.answer(question: question, choices: choices, text: text); refreshAfterChange(started) }
+        catch let error as NodClientError { try await handleAnswerError(error, started) }
     }
 
     /// A 409 means the approval or question is gone (Nod: `question_unavailable` for questions).
-    private func handleAnswerError(_ error: NodClientError) async throws -> Never {
+    private func handleAnswerError(_ error: NodClientError, _ started: Int) async throws -> Never {
+        guard started == generation else { throw error }
         if case .conflict = error {
             // Wait out any older snapshot, then fetch after the conflict. Never repeat the POST.
             if let fetchTask { _ = try? await fetchTask.value }
-            try? await refresh()
-        } else { handleActionError(error) }
+            if started == generation { try? await refresh() }
+        } else { handleActionError(error, started) }
         throw error
     }
 
     public func stop() async throws {
-        do { try await client.stop(); refreshAfterChange() }
-        catch { handleActionError(error); throw error }
+        let started = generation
+        do { try await client.stop(); refreshAfterChange(started) }
+        catch { handleActionError(error, started); throw error }
     }
 
-    private func handleActionError(_ error: Error) {
+    private func handleActionError(_ error: Error, _ started: Int) {
+        guard started == generation else { return }
         if let error = error as? NodClientError {
             switch error {
             case .unauthorized, .credentials, .network: show(error)

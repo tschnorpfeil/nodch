@@ -82,6 +82,7 @@ struct IslandPanelView: View {
         .frame(height: layout.rowHeight)
         .contentShape(Rectangle())
         .onTapGesture { model.onCollapse() }
+        .contextMenu { IslandAppMenu(commands: model.commands) }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(heading)
         .accessibilityAction(named: "Collapse") { model.onCollapse() }
@@ -113,6 +114,7 @@ struct IslandPanelView: View {
             .help("Collapse (esc)")
             .accessibilityLabel("Collapse")
         }
+        .contextMenu { IslandAppMenu(commands: model.commands) }
     }
 }
 
@@ -645,8 +647,11 @@ struct IslandStatusCard: View {
                     IslandScrollingText(text: text, maxHeight: min(IslandStyle.bodyMaxHeight, model.layout.maxContent - 120), well: false)
                 }
             }
-            HStack {
+            HStack(spacing: IslandStyle.buttonGap) {
                 Spacer(minLength: 0)
+                if model.tone == .offline {
+                    Button("Settings…") { model.commands.openSettings() }.buttonStyle(IslandButtonStyle())
+                }
                 IslandOpenButton(model: model, prominent: prominentOpen)
             }
         }
