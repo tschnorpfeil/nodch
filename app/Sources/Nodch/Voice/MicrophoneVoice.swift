@@ -12,6 +12,7 @@ enum VoiceEvent: Equatable {
     case level(Float)
     /// After `stop(finalize: true)`: the last words are in.
     case finished
+    case silence(noSpeech: Bool)
 }
 
 /// Where the quick prompt's voice comes from. Events arrive on the main actor, only for the latest `start`.
@@ -43,6 +44,10 @@ final class MicrophoneVoice: VoiceSource {
     private var reading: Task<Void, Never>?
     private var meter: LevelMeter?
     private var meterTimer: Timer?
+    private var activity: VoiceActivity?
+    private var classifier: SpeechActivity?
+    private var classifierFailed = false
+    private var pendingSilence: Bool?
     /// Speech models on their way, by locale: one request each, also when the language changes mid-download.
     private var downloading: Set<String> = []
     /// How long Return waits for the last words before sending what it has.
@@ -121,6 +126,11 @@ final class MicrophoneVoice: VoiceSource {
         meterTimer?.invalidate()
         meterTimer = nil
         meter = nil
+        activity = nil
+        classifier?.cancel()
+        classifier = nil
+        classifierFailed = false
+        pendingSilence = nil
         guard let engine else { return }
         self.engine = nil
         // Stopping the hardware takes a moment too; the card closes without waiting for it.
@@ -165,14 +175,40 @@ final class MicrophoneVoice: VoiceSource {
         // hardware, and on the main thread they froze the card's opening animation for that long.
         let feed = PendingFeed()
         let meter = LevelMeter()
-        let opened = await Task.detached { Microphone.open(tap: Self.tap(feed, meter: meter)) }.value
+        let activityFeed = SpeechActivityFeed()
+        let opened = await Task.detached { Microphone.open(tap: Self.tap(feed, meter: meter, activity: activityFeed)) }.value
         guard let engine = opened else { return fail(.noMicrophone) }
         guard wanted() else { Task.detached { engine.release() }; return }
+        let report: @Sendable (Double?, Double) -> Void = { [weak self] confidence, end in
+            DispatchQueue.main.async { [weak self] in
+                guard let self, self.generation == generation else { return }
+                guard let confidence else {
+                    if let run = self.run { self.recognitionEnded(run) }
+                    else { self.classifierFailed = true }
+                    return
+                }
+                if let noSpeech = self.activity?.sample(confidence: confidence, end: end) {
+                    if self.run != nil { self.events?(.silence(noSpeech: noSpeech)) }
+                    else { self.pendingSilence = noSpeech }
+                } else if self.activity?.failed == true {
+                    if let run = self.run { self.recognitionEnded(run) }
+                    else { self.classifierFailed = true }
+                }
+            }
+        }
+        let classifier = await Task.detached { try? SpeechActivity(format: engine.format, report: report) }.value
+        guard let classifier else { Task.detached { engine.release() }; return fail(.failed) }
+        guard wanted() else { classifier.cancel(); Task.detached { engine.release() }; return }
+        self.classifier = classifier
+        activityFeed.set(classifier)
+        activity = VoiceActivity()
         // The analyzer is built while the hardware starts; what the microphone hears meanwhile waits in `feed` and
         // goes to the analyzer first, so no word is lost.
         async let building = TranscriptionRun(locale: locale, source: engine.format)
         let started = await Task.detached { engine.start() }.value
         guard started, wanted() else {
+            classifier.cancel()
+            if self.classifier === classifier { self.classifier = nil }
             Task.detached { engine.release() }
             if let run = try? await building { await run.cancel() }
             if !started { fail(.failed) }
@@ -189,13 +225,15 @@ final class MicrophoneVoice: VoiceSource {
         guard wanted() else { await run.cancel(); return }
         feed.attach(run)
         self.run = run
+        if classifierFailed { recognitionEnded(run); return }
         self.meter = meter
         delivering = run
         reading = Task { @MainActor [weak self] in
             do {
                 for try await result in run.transcriber.results {
                     guard let self, delivering === run else { return }
-                    events?(.heard(String(result.text.characters), final: result.isFinal))
+                    let words = String(result.text.characters)
+                    events?(.heard(words, final: result.isFinal))
                 }
             } catch {}
             // Ended while still listening (an error, or the analyzer gave up): the microphone goes off and the card
@@ -206,10 +244,12 @@ final class MicrophoneVoice: VoiceSource {
         meterTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 15, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
                 guard let self, let meter = self.meter else { return }
-                self.events?(.level(meter.take()))
+                let level = meter.take()
+                self.events?(.level(level))
             }
         }
         events?(.started(language: locale.identifier(.bcp47)))
+        if let pendingSilence { self.pendingSilence = nil; events?(.silence(noSpeech: pendingSilence)) }
     }
 
     private func recognitionEnded(_ run: TranscriptionRun) {
@@ -224,10 +264,11 @@ final class MicrophoneVoice: VoiceSource {
     }
 
     /// The audio thread calls this block, not the main thread: built outside the main actor, or Swift 6 traps.
-    private nonisolated static func tap(_ feed: PendingFeed, meter: LevelMeter) -> AVAudioNodeTapBlock {
+    private nonisolated static func tap(_ feed: PendingFeed, meter: LevelMeter, activity: SpeechActivityFeed) -> AVAudioNodeTapBlock {
         { buffer, _ in
             feed.add(buffer)
             meter.add(buffer)
+            activity.add(buffer)
         }
     }
 }

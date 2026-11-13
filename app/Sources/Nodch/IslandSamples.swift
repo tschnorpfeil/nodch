@@ -76,6 +76,31 @@ enum IslandSamples {
         return draft
     }
 
+    static var voiceStarting: PromptDraft {
+        var draft = PromptDraft()
+        _ = draft.open(.hotkey)
+        return draft
+    }
+
+    static var voiceFinishing: PromptDraft {
+        var draft = listening
+        _ = draft.finishVoice()
+        return draft
+    }
+
+    static var voiceReady: PromptDraft {
+        var draft = voiceFinishing
+        _ = draft.voiceFinished()
+        return draft
+    }
+
+    static var voiceNoSpeech: PromptDraft {
+        var draft = voiceStarting
+        _ = draft.finishVoice(noSpeech: true)
+        _ = draft.voiceFinished()
+        return draft
+    }
+
     static var voiceDenied: PromptDraft {
         var draft = PromptDraft()
         _ = draft.open(.hotkey)

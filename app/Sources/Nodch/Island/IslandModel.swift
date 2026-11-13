@@ -134,6 +134,7 @@ import Observation
             case .startVoice: startVoice()
             case .stopVoice(let finalize):
                 voiceLevel = 0
+                if !finalize { voiceGeneration += 1 }
                 voice?.stop(finalize: finalize)
             case .upload(let id, let file): upload(id, file)
             case .send(let prompt, let attachments): send(prompt, attachments)
@@ -167,9 +168,16 @@ import Observation
         Task { speechLanguages = SpeechLanguage.menu(supported: await SpeechSupport.supported(), system: Locale.preferredLanguages) }
     }
 
+    @ObservationIgnored private var voiceGeneration = 0
+
     private func startVoice() {
         guard let voice else { draft.voiceUnavailable(.speechUnavailable); return }
-        voice.start { [weak self] event in self?.heard(event) }
+        voiceGeneration += 1
+        let generation = voiceGeneration
+        voice.start { [weak self] event in
+            guard let self, self.voiceGeneration == generation else { return }
+            self.heard(event)
+        }
     }
 
     private func heard(_ event: VoiceEvent) {
@@ -182,6 +190,7 @@ import Observation
             draft.voiceUnavailable(hint)
         case .heard(let words, let final): draft.heard(words, final: final)
         case .level(let level): voiceLevel = draft.voice == .listening ? level : 0
+        case .silence(let noSpeech): perform(draft.finishVoice(noSpeech: noSpeech))
         case .finished:
             voiceLevel = 0
             perform(draft.voiceFinished())
@@ -199,7 +208,7 @@ import Observation
 
     /// Arrow keys only move the highlight. Return acts like a click on the highlighted choice.
     func questionKey(_ key: UInt16) -> Bool {
-        guard let question = asking?.question, !draft.sending, draft.voice != .finishing else { return false }
+        guard let question = asking?.question, !draft.sending else { return false }
         if key == 125 || key == 126 {
             guard !question.choices.isEmpty else { return false }
             highlightedChoice = IslandPresentation.nextChoice(highlightedChoice, choices: question.choices.map(\.id), down: key == 125)
