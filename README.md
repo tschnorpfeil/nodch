@@ -19,8 +19,10 @@ leaves everything else to Nod:
 nodch has no chat of its own. It talks to a running Nod over Nod's HTTP API.
 
 Speech is turned into text on the Mac with Apple's on-device speech model (macOS downloads it once, for free); no
-audio leaves the Mac. It follows the system language and falls back to US English. The microphone is on only while
-the prompt is open.
+audio leaves the Mac. It listens in the first of your system languages (System Settings › General › Language &
+Region) that the model supports, and falls back to US English. Right-click the microphone in the prompt to pick another
+language; the choice is kept, and "Automatic" follows the system again. The microphone is on only while the prompt is
+open.
 
 ## Build
 
