@@ -272,10 +272,13 @@ public struct PromptDraft: Equatable, Sendable {
     /// A click on one of Nod's choices goes out like a send: the microphone goes off (its words stay), the field and
     /// Return wait, and the outcome lands only on this draft. Nil while another send is out.
     public mutating func answerChoice() -> [PromptEffect]? {
-        guard !sending, voice != .finishing else { return nil }
-        let effects: [PromptEffect] = voice.isActive ? [.stopVoice(finalize: false)] : []
+        guard !sending else { return nil }
+        let stopsVoice = voice.isActive || voice == .finishing
+        let effects: [PromptEffect] = stopsVoice ? [.stopVoice(finalize: false)] : []
         keepVolatile()
-        if voice.isActive { voice = .off }
+        if stopsVoice { voice = .off }
+        sendAfterFinish = false
+        voiceReady = false
         sending = true
         sendToken = nextID
         nextID += 1
