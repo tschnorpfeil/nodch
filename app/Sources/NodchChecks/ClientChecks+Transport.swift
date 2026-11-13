@@ -134,18 +134,21 @@ extension ClientChecks {
         do { _ = try await client.state(); check(false, "invalid state response") }
         catch NodClientError.invalidResponse { check(true, "invalid state JSON has a typed error") }
 
-        // Repeated refreshes during the done interval must not postpone the timer.
+        // Repeated refreshes during the done interval must not postpone the timer. The margins are wide so a slow CI
+        // runner cannot fail it: unpostponed, rest comes about 0.4 s after done; postponed, not before 0.65 s.
         let completed = Mutex(fixture(status: "running", activity: true))
         ClientStub.configure { _ in .init(body: completed.withLock { $0 }) }
-        let finishing = NodSession(client: client, doneDuration: 0.12)
+        let finishing = NodSession(client: client, doneDuration: 0.4)
         try await finishing.refresh()
         completed.withLock { $0 = idle }
         try await finishing.refresh()
+        let doneAt = Date()
         check(finishing.store.state == .done(summary: "Finished"), "session publishes completion")
-        try await Task.sleep(for: .milliseconds(75))
+        try await Task.sleep(for: .milliseconds(250))
         try await finishing.refresh()
-        try await Task.sleep(for: .milliseconds(75))
-        check(finishing.store.state == .rest, "session done timer expires without another server event")
+        for _ in 0..<300 where finishing.store.state != .rest { try await Task.sleep(for: .milliseconds(10)) }
+        check(finishing.store.state == .rest && Date().timeIntervalSince(doneAt) < 0.6,
+              "session done timer expires without another server event")
         finishing.disconnect()
 
         // A stream that ends without sending any event must still cause a state GET on
