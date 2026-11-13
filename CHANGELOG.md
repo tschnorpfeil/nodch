@@ -15,7 +15,7 @@ All notable changes to nodch are documented here. The format follows
 - Follow-up questions are focused and can be answered from the keyboard.
 
 ### Dictation
-- The quick prompt starts listening on open; your words appear live in the field.
+- Opening the quick prompt with ⌥Space starts listening; your words appear live in the field.
 - Uses Apple's on-device speech model and follows your system languages; the language can be picked from the
   microphone's context menu.
 - The microphone starts off the main thread, so the prompt opens at once.
@@ -29,4 +29,4 @@ All notable changes to nodch are documented here. The format follows
 - Shows what Nod asks to do, with the full action text, so you can approve or decline.
 
 ### Files
-- Files dropped on the island are sent to Nod with your prompt.
+- Files dropped on the island are uploaded to Nod at once and attached to the prompt you send.

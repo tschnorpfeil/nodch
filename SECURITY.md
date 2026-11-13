@@ -24,4 +24,6 @@ Only what the code shows:
 - **Speech.** Dictation uses Apple's on-device `SpeechAnalyzer`; no audio leaves the Mac through nodch. The microphone
   is used while the quick prompt is open.
 - **On disk.** The chosen speech language is kept in user defaults. Dropped files that arrive as promises are copied to
-  `~/Library/Caches/nodch/Drops/`. Files you drop are uploaded to Nod with your prompt.
+  `~/Library/Caches/nodch/Drops/`.
+- **Dropped files.** A file is uploaded to your Nod as soon as you drop it, before you press Return. Removing it from
+  the prompt or pressing Esc keeps it out of the message, but does not delete the upload from Nod.
