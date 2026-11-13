@@ -74,6 +74,9 @@ public struct PromptDraft: Equatable, Sendable {
     /// The words still being recognized; they follow `text` in the field.
     public private(set) var volatile = ""
     public private(set) var voice: VoiceState = .off
+    /// What the focused field really holds, as last seen: when the microphone went on, then whenever the card pushed
+    /// the words into the field's editor. Nil when unknown.
+    public private(set) var fieldText: String?
     public private(set) var attachments: [PromptAttachment] = []
     /// A send is out; the field and Return wait for it.
     public private(set) var sending = false
@@ -89,6 +92,10 @@ public struct PromptDraft: Equatable, Sendable {
 
     /// What the field shows.
     public var display: String { Self.join(text, volatile) }
+    /// While the microphone is on, the card shows the words itself instead of relying on the focused field, which
+    /// may not take changes from outside while it is being edited: `heard` bright, `hearing` (still being recognized,
+    /// with the space before it) dimmed. Together they are `display`.
+    public var live: (heard: String, hearing: String) { (text, String(display.dropFirst(text.count))) }
     public var ready: [NodAttachment] {
         attachments.compactMap { if case .ready(let file) = $0.status { file } else { nil } }
     }
@@ -131,6 +138,7 @@ public struct PromptDraft: Equatable, Sendable {
     public mutating func startVoice() -> [PromptEffect] {
         guard !sending, voice != .finishing, !voice.isActive else { return [] }
         voice = .starting
+        fieldText = display
         return [.startVoice]
     }
 
@@ -141,6 +149,25 @@ public struct PromptDraft: Equatable, Sendable {
         voice = .off
         return [.stopVoice(finalize: false)]
     }
+
+    /// Another dictation language was chosen. A microphone that is on, or that the old language kept off, starts
+    /// over in the new one; the words heard so far stay. Otherwise it applies the next time.
+    public mutating func languageChanged() -> [PromptEffect] {
+        switch voice {
+        case .starting, .listening:
+            keepVolatile()
+            voice = .starting
+            return [.stopVoice(finalize: false), .startVoice]
+        case .unavailable(.speechUnavailable), .unavailable(.preparing):
+            voice = .off
+            return startVoice()
+        default:
+            return []
+        }
+    }
+
+    /// The card put `shown` into the focused field's editor (or found it there).
+    public mutating func fieldShows(_ shown: String) { fieldText = shown }
 
     public mutating func voiceStarted() {
         if voice == .starting { voice = .listening }
@@ -169,7 +196,12 @@ public struct PromptDraft: Equatable, Sendable {
     public mutating func typed(_ value: String) -> [PromptEffect] {
         guard value != display, !sending, voice != .finishing else { return [] }
         let effects: [PromptEffect] = voice.isActive ? [.stopVoice(finalize: false)] : []
-        if voice.isActive { voice = .off }
+        if voice.isActive {
+            voice = .off
+            text = Self.takeOver(display, fieldHad: fieldText ?? display, edited: value)
+            volatile = ""
+            return effects
+        }
         text = value
         volatile = ""
         if notice == Self.waitsForUploads { notice = nil }
@@ -306,6 +338,22 @@ public struct PromptDraft: Equatable, Sendable {
         guard let last = head.last else { return tail }
         if last.isWhitespace || tail.first.map({ ",.;:!?)".contains($0) }) == true { return head + tail }
         return head + " " + tail
+    }
+
+    /// The first keystroke while the microphone was on. `fieldHad` is what the focused field really held before it:
+    /// the field does not always take the transcriber's words while it is being edited. When it held the whole
+    /// dictation, the edit is taken as it is (typing, Backspace, a selection replaced, a paste). When it was behind,
+    /// the edit was made on older text the person could not see; what it added goes at the end of everything heard,
+    /// where they saw the caret, and what it removed from that older text is ignored.
+    public static func takeOver(_ heard: String, fieldHad: String, edited: String) -> String {
+        if fieldHad == heard { return edited }
+        let old = Array(fieldHad), new = Array(edited)
+        var prefix = 0
+        while prefix < old.count, prefix < new.count, old[prefix] == new[prefix] { prefix += 1 }
+        var suffix = 0
+        while suffix < old.count - prefix, suffix < new.count - prefix,
+              old[old.count - 1 - suffix] == new[new.count - 1 - suffix] { suffix += 1 }
+        return heard + String(new[prefix..<(new.count - suffix)])
     }
 
     private mutating func keepVolatile() {

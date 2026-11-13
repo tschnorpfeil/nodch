@@ -31,6 +31,9 @@ final class IslandController {
     }
 
     func start() {
+        model.loadSpeechLanguages()
+        // The speech model is checked and installed now, not on the first ⌥Space. No microphone, no permission prompt.
+        model.voice?.prepare()
         model.onCompactClick = { [weak self] in self?.compactClicked() }
         model.onCollapse = { [weak self] in self?.presenter.close() }
         model.onSent = { [weak self] in self?.closePrompt() }
