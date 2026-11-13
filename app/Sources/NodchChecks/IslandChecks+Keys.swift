@@ -7,9 +7,10 @@ extension IslandChecks {
         typealias P = IslandPresentation
 
         // The shortcut on the open prompt hides it; the draft is there on the next open, the microphone off meanwhile.
-        check(P.hotkey(open: true, prompt: true, key: true) == .hide, "keys: the shortcut on the open prompt hides it")
-        check(P.hotkey(open: false, prompt: true, key: false) == .open && P.hotkey(open: true, prompt: true, key: false) == .prompt
-              && P.hotkey(open: true, prompt: false, key: true) == .prompt, "keys: otherwise the shortcut brings the prompt")
+        check(P.hotkey(open: true, prompt: true, key: true, approvalCard: false) == .hide, "keys: the shortcut on the open prompt hides it")
+        check(P.hotkey(open: false, prompt: true, key: false, approvalCard: false) == .open
+              && P.hotkey(open: true, prompt: true, key: false, approvalCard: false) == .prompt
+              && P.hotkey(open: true, prompt: false, key: true, approvalCard: false) == .prompt, "keys: otherwise the shortcut brings the prompt")
         var kept = PromptDraft()
         _ = kept.open(.hotkey)
         kept.voiceStarted()
@@ -20,6 +21,20 @@ extension IslandChecks {
         _ = kept.open(.click)
         check(kept.display == "Summarize my mail from today" && kept.attachments.count == 1,
               "keys: the hidden draft keeps its words and files for the next open")
+
+        // The approval card: ⌥Return approves, ⌥⌫ declines, never plain Return; ⌘. stops a running turn.
+        let approvalCard = P.CardOffers(approval: true)
+        check(P.keyAction(.returnKey, .option, offers: approvalCard) == .approve, "keys: ⌥Return approves on the approval card")
+        check(P.keyAction(.delete, .option, offers: approvalCard) == .decline, "keys: ⌥⌫ declines on the approval card")
+        check(P.keyAction(.returnKey, .none, offers: approvalCard) == nil, "keys: plain Return never approves")
+        check(P.keyAction(.returnKey, .option, offers: .init()) == nil && P.keyAction(.delete, .option, offers: .init()) == nil,
+              "keys: ⌥Return and ⌥⌫ belong to the field when no approval card shows")
+        check(P.keyAction(.period, .command, offers: .init(stop: true)) == .stop && P.keyAction(.period, .command, offers: .init()) == nil,
+              "keys: ⌘. stops only where a Stop button shows")
+        check(P.hotkey(open: true, prompt: false, key: false, approvalCard: true) == .takeKey,
+              "keys: the shortcut gives an approval card that opened by itself the keyboard")
+        check(P.hotkey(open: true, prompt: false, key: true, approvalCard: true) == .prompt,
+              "keys: pressed again, the shortcut brings the prompt and the approval waits in the wing")
 
         // Escape discards a draft with something in it; the hint must say so.
         var empty = PromptDraft()

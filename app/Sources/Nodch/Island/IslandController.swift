@@ -51,6 +51,7 @@ final class IslandController {
         }
         presenter.onEscape = { [weak self] in self?.escape() }
         presenter.onQuestionKey = { [weak self] key in self?.model.questionKey(key) ?? false }
+        presenter.onCardKey = { [weak self] key, modifier in self?.cardKey(key, modifier) ?? false }
         presenter.closesOnOutsideClick = { [weak self] in
             guard let cause = self?.openCause else { return true }
             return IslandPresentation.closesOnOutsideClick(cause)
@@ -243,9 +244,12 @@ final class IslandController {
     }
 
     private func hotkeyPressed() {
-        let action = IslandPresentation.hotkey(open: model.isOpen, prompt: model.showsPrompt, key: presenter.panel.isKeyWindow)
+        let action = IslandPresentation.hotkey(open: model.isOpen, prompt: model.showsPrompt, key: presenter.panel.isKeyWindow,
+                                               approvalCard: model.showsApprovalCard)
         // Closing turns the microphone off (`PromptDraft.closed`) and keeps the draft.
         if action == .hide { closePrompt(); return }
+        // The approval card keeps showing; its keys work now. The click guard keeps running from when it appeared.
+        if action == .takeKey { presenter.open(key: true); return }
         let front = NSWorkspace.shared.frontmostApplication
         if front?.processIdentifier != ProcessInfo.processInfo.processIdentifier { previousApp = front }
         if action == .prompt {
@@ -257,6 +261,17 @@ final class IslandController {
         } else {
             open(.hotkey)
         }
+    }
+
+    /// ⌥Return, ⌥⌫ or ⌘. on the card that has the keyboard: the same as a click on its button.
+    private func cardKey(_ key: IslandPresentation.CardKey, _ modifier: IslandPresentation.KeyModifier) -> Bool {
+        guard let action = IslandPresentation.keyAction(key, modifier, offers: model.cardOffers) else { return false }
+        switch action {
+        case .approve: model.answer(approved: true)
+        case .decline: model.answer(approved: false)
+        case .stop: model.stop()
+        }
+        return true
     }
 
     /// Escape: the prompt is discarded and the keyboard goes back; any other card only folds away.

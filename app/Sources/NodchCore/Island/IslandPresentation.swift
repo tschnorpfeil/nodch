@@ -166,13 +166,50 @@ public enum IslandPresentation {
         case prompt
         /// The prompt hides and the keyboard goes back. Its words and files stay for next time; only Escape discards.
         case hide
+        /// An approval card that opened by itself takes the keyboard, so its keys work. The next press brings the
+        /// prompt, and the approval waits in the wing while the person types.
+        case takeKey
     }
 
-    /// `open`: the card is open; `prompt`: it shows the prompt; `key`: it has the keyboard.
-    public static func hotkey(open: Bool, prompt: Bool, key: Bool) -> HotkeyAction {
+    /// `open`: the card is open; `prompt`: it shows the prompt; `key`: it has the keyboard; `approvalCard`: it shows
+    /// an approval.
+    public static func hotkey(open: Bool, prompt: Bool, key: Bool, approvalCard: Bool) -> HotkeyAction {
         guard open else { return .open }
-        return prompt && key ? .hide : .prompt
+        if prompt { return key ? .hide : .prompt }
+        return approvalCard && !key ? .takeKey : .prompt
     }
+
+    /// A key the open card answers to while a modifier is held. Plain keys stay with the field and the choice list.
+    public enum CardKey: Equatable, Sendable { case returnKey, delete, period }
+    public enum KeyModifier: Equatable, Sendable { case none, command, option }
+
+    /// What the card on screen offers to the keyboard.
+    public struct CardOffers: Equatable, Sendable {
+        /// The approval card with Approve and Decline.
+        public var approval: Bool
+        /// A Stop button for the running turn.
+        public var stop: Bool
+
+        public init(approval: Bool = false, stop: Bool = false) {
+            self.approval = approval; self.stop = stop
+        }
+    }
+
+    public enum KeyAction: Equatable, Sendable { case approve, decline, stop }
+
+    /// ⌥Return approves and ⌥⌫ declines on the approval card; ⌘. stops a running turn. Plain Return never approves.
+    /// The app asks only while the island has the keyboard, and Approve and Decline still wait out `answerGuard`.
+    public static func keyAction(_ key: CardKey, _ modifier: KeyModifier, offers: CardOffers) -> KeyAction? {
+        switch (key, modifier) {
+        case (.returnKey, .option): offers.approval ? .approve : nil
+        case (.delete, .option): offers.approval ? .decline : nil
+        case (.period, .command): offers.stop ? .stop : nil
+        default: nil
+        }
+    }
+
+    /// The approval card's quiet key line.
+    public static let approvalHints = "⌥↩ approve  ·  ⌥⌫ decline  ·  esc close"
 
     public enum Reaction: Equatable, Sendable { case none, reveal, conceal }
 

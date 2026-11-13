@@ -90,6 +90,14 @@ import Observation
         dropZone != .none && !isOpen ? "Drop files for Nod" : line
     }
     var sending: Bool { draft.sending }
+    /// The card shows the prompt (with an answer or Nod's question above it), not a status card.
+    var showsPromptCard: Bool { showsPrompt || tone == .rest || tone == .done || asking != nil }
+    var showsApprovalCard: Bool { !showsPromptCard && approval != nil }
+    /// What the open card offers to the keyboard (`IslandPresentation.keyAction`).
+    var cardOffers: IslandPresentation.CardOffers {
+        guard isOpen, !showsPromptCard else { return .init() }
+        return .init(approval: approval != nil, stop: tone == .working)
+    }
     var approval: (PendingApproval, more: Int)? {
         if case .needsYou(let approval, let more) = store.state { (approval, more) } else { nil }
     }

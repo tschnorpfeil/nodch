@@ -192,6 +192,8 @@ final class IslandPresenter: NSObject {
     var isIdle: Bool { !isPresented && opening.isSettled && opening.value == 0 && height.isSettled }
     var onEscape: (() -> Void)?
     var onQuestionKey: ((UInt16) -> Bool)?
+    /// A key with ⌘ or ⌥ while the card has the keyboard; true when the card acted on it.
+    var onCardKey: ((IslandPresentation.CardKey, IslandPresentation.KeyModifier) -> Bool)?
     /// Whether a click outside the card closes it (not for a card that opened by itself for an approval).
     var closesOnOutsideClick: () -> Bool = { true }
     var reduceMotion: () -> Bool = { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
@@ -420,6 +422,13 @@ final class IslandPresenter: NSObject {
         removeMonitors()
         let clicks: NSEvent.EventTypeMask = [.leftMouseDown, .rightMouseDown, .otherMouseDown]
         let local = NSEvent.addLocalMonitorForEvents(matching: clicks.union(.keyDown)) { [weak self] event in
+            // Only while the island is the key window: a card that opened by itself never sees these keys.
+            if event.type == .keyDown, let self, event.window === self.panel, self.panel.isKeyWindow,
+               let (key, modifier) = Self.cardKey(event),
+               !((self.panel.firstResponder as? NSTextView)?.hasMarkedText() ?? false),
+               MainActor.assumeIsolated({ self.onCardKey?(key, modifier) ?? false }) {
+                return nil
+            }
             if event.type == .keyDown, let self, event.window === self.panel,
                self.view.model.showsPrompt, self.panel.isKeyWindow,
                let editor = self.panel.firstResponder as? NSTextView, editor.isFieldEditor, !editor.hasMarkedText(),
@@ -461,6 +470,22 @@ final class IslandPresenter: NSObject {
                 self.close()
             }
         })
+    }
+
+    /// Return, Delete or "." with ⌘ or ⌥ alone; nil for anything else.
+    nonisolated private static func cardKey(_ event: NSEvent) -> (IslandPresentation.CardKey, IslandPresentation.KeyModifier)? {
+        let modifier: IslandPresentation.KeyModifier
+        switch event.modifierFlags.intersection([.command, .control, .option, .shift]) {
+        case [.command]: modifier = .command
+        case [.option]: modifier = .option
+        default: return nil
+        }
+        switch event.keyCode {
+        case 36, 76: return (.returnKey, modifier)
+        case 51: return (.delete, modifier)
+        // "." by the character, wherever the layout puts it.
+        default: return event.charactersIgnoringModifiers == "." ? (.period, modifier) : nil
+        }
     }
 
     // Adapted from Pippa: app/Sources/Pippa/App/IslandPresenter.swift (pressedOutside)

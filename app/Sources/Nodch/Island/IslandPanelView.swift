@@ -17,7 +17,7 @@ struct IslandPanelView: View {
             VStack(alignment: .leading, spacing: IslandStyle.gap) {
                 if !layout.notch { header }
                 ZStack(alignment: .topLeading) {
-                    if model.showsPrompt || model.tone == .rest || model.tone == .done || model.asking != nil {
+                    if model.showsPromptCard {
                         IslandPromptCard(model: model, focused: $promptFocused).transition(.opacity)
                     } else {
                         IslandStatusCard(model: model).transition(.opacity)
@@ -621,7 +621,9 @@ struct IslandStatusCard: View {
                 }
                 .buttonStyle(IslandButtonStyle())
                 .disabled(model.stopping)
+                .help("Stop (⌘.)")
                 .accessibilityLabel("Stop Nod")
+                .accessibilityHint("Command-Period")
             }
         }
     }
@@ -692,6 +694,9 @@ struct IslandApprovalCard: View {
                 Text(more == 1 ? "1 more approval waits after this one." : "\(more) more approvals wait after this one.")
                     .font(IslandStyle.caption).foregroundStyle(IslandStyle.white(IslandStyle.tertiary + 0.1))
             }
+            Text(IslandPresentation.approvalHints).font(IslandStyle.caption)
+                .foregroundStyle(IslandStyle.white(IslandStyle.tertiary))
+                .accessibilityHidden(true)
         }
         .animation(IslandStyle.fade, value: model.actionError)
         // The click guard runs from when the card is on screen, also after the prompt hid it or it was folded away.
@@ -766,6 +771,7 @@ struct IslandApprovalCard: View {
         // Dimmed while the click guard holds, so an early click is visibly not taken.
         .disabled(busy != nil || model.answerGuarded)
         .accessibilityLabel(approved ? "Approve: \(approval.title)" : "Decline: \(approval.title)")
+        .accessibilityHint(approved ? "Option-Return" : "Option-Delete")
     }
 }
 
