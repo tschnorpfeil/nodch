@@ -3,7 +3,13 @@
 All notable changes to nodch are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## 0.1.0 — Unreleased
+## 0.1.0 — 2026-11-13
+
+### Settings and keys
+- Settings window for Nod's address and token (kept in the Keychain), Test connection, Start at login; opens by
+  itself on first run. Right-click the island for Settings, Start at login and Quit.
+- Every card works from the keyboard: ⌘Return opens the Nod app, ⌥Return approves or sends ticked choices, ⌥⌫
+  declines, ⌘. stops. ⌥Space on the open prompt hides it and keeps your words.
 
 ### Island
 - Shows Nod's current status in the MacBook notch, or at the top of the menu bar on displays without one.
