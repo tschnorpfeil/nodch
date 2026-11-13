@@ -1,0 +1,28 @@
+name: Feature request
+description: Suggest a change to nodch.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        nodch is only a notch mode for Nod: no chat UI, and anything bigger opens Nod's own window.
+        Requests that fit that scope are welcome.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What do you want to do?
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What should nodch do?
+    validations:
+      required: true
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope
+      options:
+        - label: This stays a notch mode and does not add a chat UI.
+          required: true

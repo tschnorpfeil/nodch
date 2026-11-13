@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Bug in Nod itself
+    url: https://github.com/n8n-io/nod/issues
+    about: nodch is unofficial. Problems in Nod belong in Nod's repository.
