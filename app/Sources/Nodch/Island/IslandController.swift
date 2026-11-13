@@ -123,13 +123,12 @@ final class IslandController {
         case .none: break
         }
         if newQuestion, model.isOpen {
+            // Nod's question takes the keyboard at once, so the person can pick with the arrows or type an answer.
+            let front = NSWorkspace.shared.frontmostApplication
+            if front?.processIdentifier != ProcessInfo.processInfo.processIdentifier { previousApp = front }
             model.showsPrompt = true
-            if IslandPresentation.questionTakesKey(open: openCause) {
-                let front = NSWorkspace.shared.frontmostApplication
-                if front?.processIdentifier != ProcessInfo.processInfo.processIdentifier { previousApp = front }
-                presenter.open(key: true)
-                model.focusToken += 1
-            }
+            presenter.open(key: true)
+            model.focusToken += 1
         }
         refresh()
     }

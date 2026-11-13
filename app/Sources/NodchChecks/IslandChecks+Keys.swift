@@ -68,12 +68,6 @@ extension IslandChecks {
         check(!P.arrowsMoveChoices(field: "und vormittags", choices: 3), "keys: arrows stay in a field with words")
         check(!P.arrowsMoveChoices(field: "", choices: 0), "keys: arrows without choices stay in the field")
 
-        // A question takes the keyboard only on a card the person opened.
-        check(P.questionTakesKey(open: .hotkey) && P.questionTakesKey(open: .click) && P.questionTakesKey(open: .drop),
-              "keys: a question on a card the person opened takes the keyboard")
-        check(!P.questionTakesKey(open: .approval), "keys: a question on a card that opened by itself leaves the keyboard alone")
-        check(!P.questionTakesKey(open: nil), "keys: a question on a closed card leaves the keyboard alone")
-
         // The click guard's state, for the dimmed buttons: on while answers are refused, off exactly when they count.
         check(P.answerGuardRemaining(shownFor: 0) == P.answerGuard && P.answerGuardRemaining(shownFor: 0.3) > 0
               && !P.acceptsAnswer(shownFor: 0.3), "keys: the guard holds, and says so, right after a card appears")
