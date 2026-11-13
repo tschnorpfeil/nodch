@@ -35,7 +35,7 @@ final class MicrophoneVoice: VoiceSource {
     private var generation = 0
     private var events: (@MainActor (VoiceEvent) -> Void)?
     private var starting: Task<Void, Never>?
-    private var engine: AVAudioEngine?
+    private var engine: Microphone?
     private var run: TranscriptionRun?
     /// The run whose results are delivered: the live one, or the one finalizing after Return.
     private var delivering: TranscriptionRun?
@@ -122,9 +122,9 @@ final class MicrophoneVoice: VoiceSource {
         meterTimer = nil
         meter = nil
         guard let engine else { return }
-        engine.inputNode.removeTap(onBus: 0)
-        engine.stop()
         self.engine = nil
+        // Stopping the hardware takes a moment too; the card closes without waiting for it.
+        Task.detached { engine.release() }
     }
 
     private func begin(_ generation: Int) async {
@@ -161,21 +161,22 @@ final class MicrophoneVoice: VoiceSource {
             guard installed else { return fail(.preparing) }
         }
         guard wanted() else { return }
-        let engine = AVAudioEngine()
-        let input = engine.inputNode
-        let format = input.outputFormat(forBus: 0)
-        guard format.channelCount > 0, format.sampleRate > 0 else { return fail(.noMicrophone) }
-        // The analyzer is built off the main actor while `engine.start()` (about half a second of hardware) runs here;
-        // what the microphone hears meanwhile waits in `feed` and goes to the analyzer first, so no word is lost.
-        async let building = TranscriptionRun(locale: locale, source: format)
+        // The microphone starts off the main thread: creating the input and `start()` take about half a second of
+        // hardware, and on the main thread they froze the card's opening animation for that long.
         let feed = PendingFeed()
         let meter = LevelMeter()
-        input.installTap(onBus: 0, bufferSize: 2048, format: format, block: Self.tap(feed, meter: meter))
-        engine.prepare()
-        do { try engine.start() } catch {
-            input.removeTap(onBus: 0)
+        let opened = await Task.detached { Microphone.open(tap: Self.tap(feed, meter: meter)) }.value
+        guard let engine = opened else { return fail(.noMicrophone) }
+        guard wanted() else { Task.detached { engine.release() }; return }
+        // The analyzer is built while the hardware starts; what the microphone hears meanwhile waits in `feed` and
+        // goes to the analyzer first, so no word is lost.
+        async let building = TranscriptionRun(locale: locale, source: engine.format)
+        let started = await Task.detached { engine.start() }.value
+        guard started, wanted() else {
+            Task.detached { engine.release() }
             if let run = try? await building { await run.cancel() }
-            return fail(.failed)
+            if !started { fail(.failed) }
+            return
         }
         // From here `stop` turns the microphone off, also while the analyzer is still being built.
         self.engine = engine
@@ -228,6 +229,44 @@ final class MicrophoneVoice: VoiceSource {
             feed.add(buffer)
             meter.add(buffer)
         }
+    }
+}
+
+/// The engine and its input, used off the main thread only while starting and stopping; nothing touches it at the
+/// same time (the main actor holds it only in between).
+private final class Microphone: @unchecked Sendable {
+    let engine: AVAudioEngine
+    let format: AVAudioFormat
+
+    private init(engine: AVAudioEngine, format: AVAudioFormat) {
+        self.engine = engine
+        self.format = format
+    }
+
+    /// The input with the tap installed and the engine prepared; nil when there is no input with sound.
+    static func open(tap: @escaping AVAudioNodeTapBlock) -> Microphone? {
+        let engine = AVAudioEngine()
+        let input = engine.inputNode
+        let format = input.outputFormat(forBus: 0)
+        guard format.channelCount > 0, format.sampleRate > 0 else { return nil }
+        input.installTap(onBus: 0, bufferSize: 2048, format: format, block: tap)
+        engine.prepare()
+        return Microphone(engine: engine, format: format)
+    }
+
+    func start() -> Bool {
+        do {
+            try engine.start()
+            return true
+        } catch {
+            engine.inputNode.removeTap(onBus: 0)
+            return false
+        }
+    }
+
+    func release() {
+        engine.inputNode.removeTap(onBus: 0)
+        engine.stop()
     }
 }
 
