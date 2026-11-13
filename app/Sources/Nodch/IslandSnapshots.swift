@@ -17,6 +17,8 @@ enum IslandSnapshots {
         var drop = IslandDropZone.none
         var answer: NodAnswer?
         var picked: Set<String> = []
+        /// The click guard still holds: Approve, Decline and the choices show dimmed.
+        var guarded = false
     }
 
     static let scenes: [Scene] = [
@@ -28,6 +30,7 @@ enum IslandSnapshots {
         Scene(name: "working", state: IslandSamples.working()),
         Scene(name: "working-open", state: IslandSamples.working()),
         Scene(name: "needs-you", state: .needsYou(IslandSamples.email, more: 0), open: true),
+        Scene(name: "needs-you-guarded", state: .needsYou(IslandSamples.email, more: 0), open: true, guarded: true),
         Scene(name: "needs-you-compact", state: .needsYou(IslandSamples.email, more: 2)),
         Scene(name: "needs-you-long", state: .needsYou(IslandSamples.longPost, more: 2), open: true),
         Scene(name: "needs-you-tall", state: .needsYou(IslandSamples.tall, more: 0), open: true),
@@ -43,6 +46,7 @@ enum IslandSnapshots {
         Scene(name: "failed", state: IslandSamples.failed),
         Scene(name: "failed-open", state: IslandSamples.failed, open: true),
         Scene(name: "prompt", state: .rest, open: true, prompt: PromptDraft()),
+        Scene(name: "prompt-text", state: .rest, open: true, prompt: PromptDraft(text: "Summarise my unread mail from today")),
         Scene(name: "prompt-error", state: IslandSamples.working(), open: true, prompt: IslandSamples.failedSend),
         Scene(name: "prompt-preparing", state: .rest, open: true, prompt: IslandSamples.voiceStarting),
         Scene(name: "prompt-transcribing", state: .rest, open: true, prompt: IslandSamples.voiceFinishing),
@@ -131,6 +135,11 @@ enum IslandSnapshots {
         window.orderFrontRegardless()
         // Let SwiftUI lay out and report the card's height before drawing.
         for _ in 0..<7 { try? await Task.sleep(for: .milliseconds(120)); canvas.layoutSubtreeIfNeeded(); layout() }
+        // The card started the click guard when it appeared: settle it either way, so the picture never depends on timing.
+        if model.approval != nil || model.asking != nil {
+            model.startAnswerGuard(at: scene.guarded ? Date() : .distantPast)
+            try? await Task.sleep(for: .milliseconds(120)); canvas.layoutSubtreeIfNeeded(); layout()
+        }
         // Twice the points, like a Retina display.
         guard let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(size.width * 2), pixelsHigh: Int(size.height * 2),
                                          bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,

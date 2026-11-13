@@ -40,6 +40,9 @@ public enum IslandPresentation {
 
     public static func acceptsAnswer(shownFor age: TimeInterval) -> Bool { age >= answerGuard }
 
+    /// How much longer the guard holds; 0 once the card takes answers. The buttons show dimmed until then.
+    public static func answerGuardRemaining(shownFor age: TimeInterval) -> TimeInterval { max(0, answerGuard - age) }
+
     /// `doneAge`: seconds since the island first showed the current `.done`; nil if it has not shown it yet.
     public static func tone(_ state: IslandState, doneAge: TimeInterval? = nil) -> IslandTone {
         switch state {
@@ -103,6 +106,17 @@ public enum IslandPresentation {
         return choices[min(max(index + (down ? 1 : -1), 0), choices.count - 1)]
     }
 
+    /// The quiet key line under the prompt. `discards`: Escape would throw away words or files. ⌘↩ is named here,
+    /// not in the Open Nod button beside the field: a wider button would narrow the field and wrap its placeholder.
+    public static func promptHints(question: NodQuestion?, discards: Bool) -> String {
+        let tail = "  ·  " + (discards ? "esc discard" : "esc close") + "  ·  ⌘↩ open Nod"
+        guard let question, !question.choices.isEmpty else { return "↩ send" + tail }
+        return (question.multiple ? "↑↓ navigate  ·  ↩ select  ·  ⌥↩ send" : "↑↓ navigate  ·  ↩ answer") + tail
+    }
+
+    /// Up and Down move between choices only while the field is empty; with words in it they belong to the field.
+    public static func arrowsMoveChoices(field: String, choices: Int) -> Bool { field.isEmpty && choices > 0 }
+
     /// The short name of the state, for the card's header and VoiceOver.
     public static func heading(_ tone: IslandTone) -> String {
         switch tone {
@@ -140,6 +154,63 @@ public enum IslandPresentation {
     /// A card the person opened closes on a click elsewhere. One that opened by itself for an approval stays until it
     /// is answered or collapsed: a click in another app is not a decision about it.
     public static func closesOnOutsideClick(_ cause: OpenCause) -> Bool { cause != .approval }
+
+    /// What the shortcut does to the card.
+    public enum HotkeyAction: Equatable, Sendable {
+        /// The quick prompt opens.
+        case open
+        /// The open card turns into the prompt and takes the keyboard.
+        case prompt
+        /// The prompt hides and the keyboard goes back. Its words and files stay for next time; only Escape discards.
+        case hide
+        /// An approval card that opened by itself takes the keyboard, so its keys work. The next press brings the
+        /// prompt, and the approval waits in the wing while the person types.
+        case takeKey
+    }
+
+    /// `open`: the card is open; `prompt`: it shows the prompt; `key`: it has the keyboard; `approvalCard`: it shows
+    /// an approval.
+    public static func hotkey(open: Bool, prompt: Bool, key: Bool, approvalCard: Bool) -> HotkeyAction {
+        guard open else { return .open }
+        if prompt { return key ? .hide : .prompt }
+        return approvalCard && !key ? .takeKey : .prompt
+    }
+
+    /// A key the open card answers to while a modifier is held. Plain keys stay with the field and the choice list.
+    public enum CardKey: Equatable, Sendable { case returnKey, delete, period }
+    public enum KeyModifier: Equatable, Sendable { case none, command, option }
+
+    /// What the card on screen offers to the keyboard.
+    public struct CardOffers: Equatable, Sendable {
+        /// The approval card with Approve and Decline.
+        public var approval: Bool
+        /// A Stop button for the running turn.
+        public var stop: Bool
+        /// Ticked choices on a multiple-choice question, and an empty field: they can go out as they are.
+        public var picks: Bool
+
+        public init(approval: Bool = false, stop: Bool = false, picks: Bool = false) {
+            self.approval = approval; self.stop = stop; self.picks = picks
+        }
+    }
+
+    public enum KeyAction: Equatable, Sendable { case approve, decline, stop, sendPicks, openNod }
+
+    /// ⌘Return does what "Open Nod" does, on every card. ⌥Return approves and ⌥⌫ declines on the approval card; ⌥Return sends ticked choices (like their Send button);
+    /// ⌘. stops a running turn. Plain Return never approves and keeps ticking choices.
+    /// The app asks only while the island has the keyboard, and Approve and Decline still wait out `answerGuard`.
+    public static func keyAction(_ key: CardKey, _ modifier: KeyModifier, offers: CardOffers) -> KeyAction? {
+        switch (key, modifier) {
+        case (.returnKey, .command): .openNod
+        case (.returnKey, .option): offers.approval ? .approve : offers.picks ? .sendPicks : nil
+        case (.delete, .option): offers.approval ? .decline : nil
+        case (.period, .command): offers.stop ? .stop : nil
+        default: nil
+        }
+    }
+
+    /// The approval card's quiet key line.
+    public static let approvalHints = "⌥↩ approve  ·  ⌥⌫ decline  ·  esc close"
 
     public enum Reaction: Equatable, Sendable { case none, reveal, conceal }
 

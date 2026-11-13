@@ -45,12 +45,14 @@ final class IslandController {
         presenter.view.onPanelShown = { [weak self] in
             guard let self else { return }
             // Reopening keeps the SwiftUI card alive, so its onAppear does not run: restart the click guard here.
-            if model.approval != nil, !model.showsPrompt { model.approvalShownAt = Date() }
+            // An approval card, or Nod's question with its choices, waits out the guard again on every showing.
+            if model.approval != nil && !model.showsPrompt || model.asking?.question != nil { model.startAnswerGuard() }
             guard model.showsPrompt else { return }
             model.focusToken += 1
         }
         presenter.onEscape = { [weak self] in self?.escape() }
         presenter.onQuestionKey = { [weak self] key in self?.model.questionKey(key) ?? false }
+        presenter.onCardKey = { [weak self] key, modifier in self?.cardKey(key, modifier) ?? false }
         presenter.closesOnOutsideClick = { [weak self] in
             guard let cause = self?.openCause else { return true }
             return IslandPresentation.closesOnOutsideClick(cause)
@@ -111,7 +113,7 @@ final class IslandController {
         }
         let newQuestion = IslandPresentation.newQuestion(from: old, to: new)
         if IslandPresentation.waitingID(old) != IslandPresentation.waitingID(new) {
-            model.actionError = nil; model.approvalShownAt = Date(); model.picked = []; model.highlightedChoice = nil
+            model.actionError = nil; model.startAnswerGuard(); model.picked = []; model.highlightedChoice = nil
         }
         if case .working = new {} else if case .working = old { model.actionError = nil }
         // An open card turns into the answer (with the prompt under it) when Nod finishes or asks, so it stays at rest.
@@ -122,6 +124,7 @@ final class IslandController {
         case .none: break
         }
         if newQuestion, model.isOpen {
+            // Nod's question takes the keyboard at once, so the person can pick with the arrows or type an answer.
             let front = NSWorkspace.shared.frontmostApplication
             if front?.processIdentifier != ProcessInfo.processInfo.processIdentifier { previousApp = front }
             model.showsPrompt = true
@@ -241,10 +244,15 @@ final class IslandController {
     }
 
     private func hotkeyPressed() {
-        if model.isOpen, model.showsPrompt, presenter.panel.isKeyWindow { escape(); return }
+        let action = IslandPresentation.hotkey(open: model.isOpen, prompt: model.showsPrompt, key: presenter.panel.isKeyWindow,
+                                               approvalCard: model.showsApprovalCard)
+        // Closing turns the microphone off (`PromptDraft.closed`) and keeps the draft.
+        if action == .hide { closePrompt(); return }
+        // The approval card keeps showing; its keys work now. The click guard keeps running from when it appeared.
+        if action == .takeKey { presenter.open(key: true); return }
         let front = NSWorkspace.shared.frontmostApplication
         if front?.processIdentifier != ProcessInfo.processInfo.processIdentifier { previousApp = front }
-        if model.isOpen {
+        if action == .prompt {
             model.showsPrompt = true
             model.perform(model.draft.open(.hotkey))
             openCause = .hotkey
@@ -253,6 +261,24 @@ final class IslandController {
         } else {
             open(.hotkey)
         }
+    }
+
+    /// ⌘Return, ⌥Return, ⌥⌫ or ⌘. on the card that has the keyboard: the same as a click on its button.
+    private func cardKey(_ key: IslandPresentation.CardKey, _ modifier: IslandPresentation.KeyModifier) -> Bool {
+        guard model.isOpen, let action = IslandPresentation.keyAction(key, modifier, offers: model.cardOffers) else { return false }
+        switch action {
+        case .approve: model.answer(approved: true)
+        case .decline: model.answer(approved: false)
+        case .stop: model.stop()
+        case .sendPicks: model.sendPicks()
+        case .openNod:
+            // The "Open Nod" button's path. Nod comes to the front, so the keyboard goes there, not back to the app
+            // before; a draft stays for next time, neither sent nor discarded.
+            model.openNod()
+            previousApp = nil
+            presenter.close()
+        }
+        return true
     }
 
     /// Escape: the prompt is discarded and the keyboard goes back; any other card only folds away.

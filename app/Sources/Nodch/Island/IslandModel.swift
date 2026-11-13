@@ -26,8 +26,12 @@ import Observation
     private(set) var stopping = false
     /// A failed Approve, Decline or Stop, shown in the card until the next try or another approval.
     var actionError: String?
-    /// When the current approval first showed; Approve and Decline wait out `IslandPresentation.answerGuard`.
-    var approvalShownAt = Date.distantPast
+    /// When the current approval or question first showed; Approve, Decline and the choices wait out
+    /// `IslandPresentation.answerGuard`. Set through `startAnswerGuard`.
+    private(set) var approvalShownAt = Date.distantPast
+    /// The guard still holds: those buttons show dimmed and take nothing.
+    private(set) var answerGuarded = false
+    @ObservationIgnored private var guardEnd: Task<Void, Never>?
     /// Raised to put the keyboard in the prompt field once the card can take it.
     var focusToken = 0
     var layout = Layout()
@@ -86,6 +90,16 @@ import Observation
         dropZone != .none && !isOpen ? "Drop files for Nod" : line
     }
     var sending: Bool { draft.sending }
+    /// The card shows the prompt (with an answer or Nod's question above it), not a status card.
+    var showsPromptCard: Bool { showsPrompt || tone == .rest || tone == .done || asking != nil }
+    var showsApprovalCard: Bool { !showsPromptCard && approval != nil }
+    /// What the open card offers to the keyboard (`IslandPresentation.keyAction`).
+    var cardOffers: IslandPresentation.CardOffers {
+        guard isOpen else { return .init() }
+        guard showsPromptCard else { return .init(approval: approval != nil, stop: tone == .working) }
+        let field = draft.display.trimmingCharacters(in: .whitespacesAndNewlines)
+        return .init(picks: asking?.question?.multiple == true && !picked.isEmpty && field.isEmpty && !draft.sending)
+    }
     var approval: (PendingApproval, more: Int)? {
         if case .needsYou(let approval, let more) = store.state { (approval, more) } else { nil }
     }
@@ -111,6 +125,21 @@ import Observation
                 actionError = (approved ? "Couldn’t approve: " : "Couldn’t decline: ") + Self.describe(error)
             }
             answering = nil
+        }
+    }
+
+    /// The card shows a new decision (or shows it again): the guard starts at `shownAt`. The buttons come back by
+    /// themselves when it ends; nobody has to move the pointer.
+    func startAnswerGuard(at shownAt: Date = Date()) {
+        approvalShownAt = shownAt
+        guardEnd?.cancel()
+        let remaining = IslandPresentation.answerGuardRemaining(shownFor: Date().timeIntervalSince(shownAt))
+        answerGuarded = remaining > 0
+        guard remaining > 0 else { return }
+        guardEnd = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(remaining))
+            guard !Task.isCancelled else { return }
+            self?.answerGuarded = false
         }
     }
 
@@ -206,11 +235,12 @@ import Observation
         }
     }
 
-    /// Arrow keys only move the highlight. Return acts like a click on the highlighted choice.
+    /// Arrow keys only move the highlight, and only while the field is empty. Return acts like a click on the
+    /// highlighted choice.
     func questionKey(_ key: UInt16) -> Bool {
         guard let question = asking?.question, !draft.sending else { return false }
         if key == 125 || key == 126 {
-            guard !question.choices.isEmpty else { return false }
+            guard IslandPresentation.arrowsMoveChoices(field: draft.display, choices: question.choices.count) else { return false }
             highlightedChoice = IslandPresentation.nextChoice(highlightedChoice, choices: question.choices.map(\.id), down: key == 125)
             return true
         }
@@ -232,6 +262,8 @@ import Observation
     /// Sends the ticked choices of a multiple-choice question, with the words in the field if there are any.
     func sendPicks() {
         guard let asked = asking, let question = asked.question, !picked.isEmpty else { return }
+        // The same guard as a single choice: a card that just (re)appeared ignores Send for a moment.
+        guard IslandPresentation.acceptsAnswer(shownFor: Date().timeIntervalSince(approvalShownAt)) else { return }
         answer(asked, choices: question.choices.filter { picked.contains($0.id) }, withWords: true)
     }
 

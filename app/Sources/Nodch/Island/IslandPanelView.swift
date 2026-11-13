@@ -17,7 +17,7 @@ struct IslandPanelView: View {
             VStack(alignment: .leading, spacing: IslandStyle.gap) {
                 if !layout.notch { header }
                 ZStack(alignment: .topLeading) {
-                    if model.showsPrompt || model.tone == .rest || model.tone == .done || model.asking != nil {
+                    if model.showsPromptCard {
                         IslandPromptCard(model: model, focused: $promptFocused).transition(.opacity)
                     } else {
                         IslandStatusCard(model: model).transition(.opacity)
@@ -140,7 +140,7 @@ struct IslandPromptCard: View {
             }
             HStack(alignment: .top, spacing: IslandStyle.buttonGap) {
                 field(draft)
-                IslandOpenButton(model: model)
+                IslandOpenButton(model: model, showsKey: false)
             }
             if !draft.attachments.isEmpty {
                 IslandChips(model: model, attachments: draft.attachments)
@@ -184,22 +184,29 @@ struct IslandPromptCard: View {
             .overlay(alignment: .topTrailing) {
                 HStack(spacing: 2) {
                     IslandMicButton(model: model, voice: draft.voice, level: model.voiceLevel)
-                    Group {
-                        if draft.sending || draft.voice == .finishing {
-                            ProgressView().controlSize(.small).scaleEffect(0.7)
-                        } else {
+                    if draft.sending || draft.voice == .finishing {
+                        ProgressView().controlSize(.small).scaleEffect(0.7)
+                            .frame(width: 18, height: IslandStyle.controlHeight)
+                            .accessibilityHidden(true)
+                    } else {
+                        // The same path as Return, so the mouse can send too.
+                        Button { model.submitPrompt() } label: {
                             Image(systemName: "return").font(.system(size: 10, weight: .semibold))
                                 .foregroundStyle(IslandStyle.white(draft.canSend ? IslandStyle.secondary : IslandStyle.tertiary - 0.1))
+                                .frame(width: 18, height: IslandStyle.controlHeight)
+                                .contentShape(Rectangle())
                         }
+                        .buttonStyle(.plain)
+                        .disabled(!draft.canSend)
+                        .help("Send (↩)")
+                        .accessibilityLabel("Send")
                     }
-                    .frame(width: 18, height: IslandStyle.controlHeight)
-                    .accessibilityHidden(true)
                 }
                 .padding(.trailing, 6)
             }
             .accessibilityLabel("Ask Nod")
-            .accessibilityHint(draft.voice == .listening ? "Listening. Typing takes over, Return sends, Escape discards"
-                                                        : "Return sends, Escape discards")
+            .accessibilityHint((draft.voice == .listening ? "Listening. Typing takes over, Return sends, " : "Return sends, ")
+                               + (draft.discardsOnEscape ? "Escape discards" : "Escape closes"))
     }
 
     /// What was heard so far, the words still being recognized dimmed after it, or where the microphone is at.
@@ -267,13 +274,9 @@ struct IslandPromptCard: View {
             IslandErrorLine(text: error)
         } else if let notice = draft.notice {
             footnote(notice, symbol: "info.circle")
-        } else if let question = model.asking?.question, !question.choices.isEmpty {
-            Text(question.multiple ? "↑↓ navigate  ·  ↩ select  ·  Send to answer  ·  esc close" : "↑↓ navigate  ·  ↩ answer  ·  esc close")
-                .font(IslandStyle.caption).foregroundStyle(IslandStyle.white(IslandStyle.tertiary))
-                .accessibilityHidden(true)
         } else {
-            Text("↩ send  ·  esc close").font(IslandStyle.caption)
-                .foregroundStyle(IslandStyle.white(IslandStyle.tertiary))
+            Text(IslandPresentation.promptHints(question: model.asking?.question, discards: draft.discardsOnEscape))
+                .font(IslandStyle.caption).foregroundStyle(IslandStyle.white(IslandStyle.tertiary))
                 .accessibilityHidden(true)
         }
     }
@@ -328,7 +331,8 @@ struct IslandAnswer: View {
                 VStack(alignment: .leading, spacing: 6) {
                     ForEach(question.choices) { choice in choiceButton(choice, multiple: question.multiple) }
                 }
-                .disabled(model.draft.sending)
+                .disabled(model.draft.sending || model.answerGuarded)
+                .opacity(model.answerGuarded ? 0.55 : 1)
                 if question.multiple {
                     HStack {
                         Spacer(minLength: 0)
@@ -339,7 +343,8 @@ struct IslandAnswer: View {
                             }
                         }
                         .buttonStyle(IslandButtonStyle(prominent: true))
-                        .disabled(model.picked.isEmpty || model.draft.sending)
+                        .disabled(model.picked.isEmpty || model.draft.sending || model.answerGuarded)
+                        .accessibilityHint("Option-Return, when the field is empty")
                     }
                 }
             }
@@ -617,7 +622,9 @@ struct IslandStatusCard: View {
                 }
                 .buttonStyle(IslandButtonStyle())
                 .disabled(model.stopping)
+                .help("Stop (⌘.)")
                 .accessibilityLabel("Stop Nod")
+                .accessibilityHint("Command-Period")
             }
         }
     }
@@ -688,17 +695,20 @@ struct IslandApprovalCard: View {
                 Text(more == 1 ? "1 more approval waits after this one." : "\(more) more approvals wait after this one.")
                     .font(IslandStyle.caption).foregroundStyle(IslandStyle.white(IslandStyle.tertiary + 0.1))
             }
+            Text(IslandPresentation.approvalHints).font(IslandStyle.caption)
+                .foregroundStyle(IslandStyle.white(IslandStyle.tertiary))
+                .accessibilityHidden(true)
         }
         .animation(IslandStyle.fade, value: model.actionError)
         // The click guard runs from when the card is on screen, also after the prompt hid it or it was folded away.
-        .onAppear { model.approvalShownAt = Date() }
-        .onChange(of: approval.id) { model.approvalShownAt = Date() }
+        .onAppear { model.startAnswerGuard() }
+        .onChange(of: approval.id) { model.startAnswerGuard() }
     }
 
-    /// Title, question, fields and body scroll together in what the display leaves after the button row, so the
-    /// decision stays reachable however long Nod's text is.
+    /// Title, question, fields and body scroll together in what the display leaves after the button row and the key
+    /// line (26 pt of the reserve), so the decision stays reachable however long Nod's text is.
     private var detailsMax: CGFloat {
-        max(120, model.layout.maxContent - 170)
+        max(120, model.layout.maxContent - 196)
     }
 
     private var details: some View {
@@ -759,8 +769,10 @@ struct IslandApprovalCard: View {
             }
         }
         .buttonStyle(IslandButtonStyle(prominent: approved))
-        .disabled(busy != nil)
+        // Dimmed while the click guard holds, so an early click is visibly not taken.
+        .disabled(busy != nil || model.answerGuarded)
         .accessibilityLabel(approved ? "Approve: \(approval.title)" : "Decline: \(approval.title)")
+        .accessibilityHint(approved ? "Option-Return" : "Option-Delete")
     }
 }
 
@@ -867,16 +879,25 @@ struct IslandErrorLine: View {
 struct IslandOpenButton: View {
     var model: IslandModel
     var prominent = false
+    /// ⌘↩ in the button; off beside the prompt field, whose footer names it instead.
+    var showsKey = true
 
     var body: some View {
         Button { model.openNod() } label: {
             HStack(spacing: 5) {
                 Text("Open Nod")
                 Image(systemName: "arrow.up.right").font(.system(size: 9, weight: .bold)).opacity(0.8)
+                // The key in the hint style, inside the button: these rows have room, so the card does not grow.
+                if showsKey {
+                    Text("⌘↩").font(IslandStyle.caption).foregroundStyle(IslandStyle.white(IslandStyle.tertiary))
+                        .accessibilityHidden(true)
+                }
             }
         }
         .buttonStyle(IslandButtonStyle(prominent: prominent))
+        .help("Open Nod (⌘↩)")
         .accessibilityLabel("Open Nod")
+        .accessibilityHint("Command-Return")
     }
 }
 
