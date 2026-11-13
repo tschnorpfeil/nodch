@@ -104,7 +104,7 @@ import Observation
         promptError = nil
         Task {
             do {
-                try await actions.send(prompt: text)
+                try await actions.send(prompt: text, attachments: [])
                 prompt = ""
                 sending = false
                 onSent()

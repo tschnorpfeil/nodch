@@ -114,7 +114,7 @@ extension ClientChecks {
             else { check(false, "401 offline") }
         }
         ClientStub.configure { _ in .init(error: URLError(.cannotConnectToHost)) }
-        do { try await session.send(prompt: "one explicit action"); check(false, "network send error") }
+        do { try await session.send(prompt: "one explicit action", attachments: []); check(false, "network send error") }
         catch NodClientError.network {
             check(ClientStub.requests.count == 1, "network failure never retries send")
             if case .offline = session.store.state { check(true, "unreachable maps to offline") }

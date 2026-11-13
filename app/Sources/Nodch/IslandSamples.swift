@@ -68,8 +68,8 @@ final class DemoActions: NodActions {
     weak var store: IslandStore?
     var failNextSend = true
 
-    func send(prompt: String) async throws {
-        print("demo: send(prompt: \"\(prompt)\")")
+    func send(prompt: String, attachments: [NodAttachment]) async throws {
+        print("demo: send(prompt: \"\(prompt)\", attachments: \(attachments.map(\.name)))")
         try await Task.sleep(for: .milliseconds(450))
         // The first send fails once, so the inline error can be seen; the next one goes through.
         if failNextSend {
@@ -84,6 +84,13 @@ final class DemoActions: NodActions {
         try await Task.sleep(for: .milliseconds(400))
         store?.state = approved ? IslandSamples.working(step: "Doing what you approved", site: nil, title: approval.title, seconds: 0)
                                 : .done(summary: "Declined: \(approval.title)")
+    }
+
+    func upload(file: URL) async throws -> NodAttachment {
+        print("demo: upload(file: \(file.lastPathComponent))")
+        try await Task.sleep(for: .milliseconds(350))
+        let size = (try? file.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+        return NodAttachment(id: UUID().uuidString.lowercased(), name: file.lastPathComponent, mimeType: "application/octet-stream", size: size)
     }
 
     func stop() async throws {
