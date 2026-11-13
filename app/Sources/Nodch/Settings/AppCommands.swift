@@ -61,6 +61,9 @@ import SwiftUI
         }
     }
 
+    /// Reads the login item's status again: it can change in System Settings while nodch runs.
+    func refreshLoginStatus() { loginRevision += 1 }
+
     func quit() { NSApp.terminate(nil) }
 }
 

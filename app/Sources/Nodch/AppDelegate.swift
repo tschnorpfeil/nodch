@@ -21,6 +21,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.demo = demo
     }
 
+    /// Back from System Settings, Start at login may have been approved or turned off there.
+    func applicationDidBecomeActive(_ notification: Notification) {
+        commands.refreshLoginStatus()
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         let settings = ConnectionSettings(tokens: KeychainTokenStore())
         if demo {

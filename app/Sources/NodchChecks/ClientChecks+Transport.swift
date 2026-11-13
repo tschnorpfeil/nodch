@@ -68,6 +68,24 @@ extension ClientChecks {
         }
         let requests = ClientStub.requests
         check(requests.filter { $0.httpMethod == "POST" }.count == 1 && requests.filter { $0.url?.path == "/api/state" }.count == 1 && session.store.state == .rest, "409 refreshes state without retrying approval")
+
+        // Settings saved another server while an answer was on its way: when the old session's 409 comes back after
+        // `disconnect`, it neither fetches state from the old server nor writes the store the new session owns.
+        ClientStub.configure { request in
+            if request.httpMethod == "POST" { Thread.sleep(forTimeInterval: 0.15) }
+            return request.httpMethod == "POST"
+                ? .init(status: 409, body: Data("{\"error\":\"This approval is no longer pending.\"}".utf8))
+                : .init(body: idle)
+        }
+        let replaced = NodSession(client: client)
+        replaced.store.state = .needsYou(approval, more: 0)
+        let late = Task { try? await replaced.answer(approval: approval, approved: true) }
+        try await Task.sleep(for: .milliseconds(40))
+        replaced.disconnect()
+        await late.value
+        try await Task.sleep(for: .milliseconds(100))
+        check(ClientStub.requests.filter { $0.url?.path == "/api/state" }.isEmpty && replaced.store.state == .needsYou(approval, more: 0),
+              "an answer that returns after disconnect leaves the old server and the store alone")
         if let body = requests.first.map({ request -> Data? in
             if let body = request.httpBody { return body }
             guard let stream = request.httpBodyStream else { return nil }

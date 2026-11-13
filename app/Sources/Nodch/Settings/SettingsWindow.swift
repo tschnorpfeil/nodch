@@ -29,6 +29,7 @@ final class SettingsWindow: NSWindow {
     init(model: SettingsModel) { self.model = model }
 
     func show() {
+        model.commands.refreshLoginStatus()
         let window = self.window ?? makeWindow()
         self.window = window
         if !window.isVisible { window.center() }

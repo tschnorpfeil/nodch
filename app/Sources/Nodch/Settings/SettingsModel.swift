@@ -20,7 +20,7 @@ import ServiceManagement
     let environmentAddress: URL?
     var server: String { didSet { if server != oldValue { serverChanged() } } }
     /// A new token typed into the secure field; empty keeps whatever is stored.
-    var tokenEntry = "" { didSet { if tokenEntry != oldValue { test = .idle; saved = nil } } }
+    var tokenEntry = "" { didSet { if tokenEntry != oldValue { resetTest(); saved = nil } } }
     /// The token stored for the address in the field.
     private(set) var storedToken = false
     /// Remove was clicked: the stored token goes on Save.
@@ -62,12 +62,20 @@ import ServiceManagement
         return "nodch \(short)"
     }
 
-    var showsStoredToken: Bool { storedToken && !removing }
+    /// A token being typed stays visible (as dots) in its field, also after the address changes: it is the one Test
+    /// and Save use, never one hidden behind "Saved in Keychain".
+    var showsStoredToken: Bool { storedToken && !removing && tokenEntry.isEmpty }
+
+    /// A test still running belongs to inputs that are gone: its result is dropped.
+    private func resetTest() {
+        testRun += 1
+        test = .idle
+    }
 
     private var currentAddress: URL? { try? ConnectionSettings.normalize(server) }
 
     private func serverChanged() {
-        test = .idle
+        resetTest()
         saved = nil
         removing = false
         storedToken = currentAddress.map { settings.token(for: $0) != nil } ?? false
@@ -76,7 +84,7 @@ import ServiceManagement
     func removeToken() {
         removing = true
         tokenEntry = ""
-        test = .idle
+        resetTest()
         saved = nil
     }
 
@@ -118,6 +126,7 @@ import ServiceManagement
             tokenEntry = ""
             removing = false
             storedToken = settings.token(for: address) != nil
+            resetTest()
             saved = ""
             onSaved()
         } catch {
