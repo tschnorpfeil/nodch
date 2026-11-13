@@ -150,7 +150,8 @@ import Foundation
 
     private func show(_ error: Error) {
         doneTask?.cancel(); doneTask = nil
-        store.state = .offline(reason: error.localizedDescription)
+        // Plain words that name the address nodch tried, not environment variables.
+        store.state = .offline(reason: ConnectionCheck(error: error).message(address: client.configuration.baseURL))
     }
 
     public func send(prompt: String, attachments: [NodAttachment]) async throws {

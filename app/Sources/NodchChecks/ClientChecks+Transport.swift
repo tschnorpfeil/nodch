@@ -113,7 +113,7 @@ extension ClientChecks {
         ClientStub.configure { _ in .init(status: 401) }
         do { try await session.refresh(); check(false, "401 handling") }
         catch NodClientError.unauthorized {
-            if case .offline(let reason) = session.store.state { check(reason.contains("credentials"), "401 maps to offline credentials") }
+            if case .offline(let reason) = session.store.state { check(reason.contains("rejected the token"), "401 maps to offline: the token was rejected") }
             else { check(false, "401 offline") }
         }
         ClientStub.configure { _ in .init(error: URLError(.cannotConnectToHost)) }
