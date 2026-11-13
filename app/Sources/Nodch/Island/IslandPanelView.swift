@@ -184,16 +184,23 @@ struct IslandPromptCard: View {
             .overlay(alignment: .topTrailing) {
                 HStack(spacing: 2) {
                     IslandMicButton(model: model, voice: draft.voice, level: model.voiceLevel)
-                    Group {
-                        if draft.sending || draft.voice == .finishing {
-                            ProgressView().controlSize(.small).scaleEffect(0.7)
-                        } else {
+                    if draft.sending || draft.voice == .finishing {
+                        ProgressView().controlSize(.small).scaleEffect(0.7)
+                            .frame(width: 18, height: IslandStyle.controlHeight)
+                            .accessibilityHidden(true)
+                    } else {
+                        // The same path as Return, so the mouse can send too.
+                        Button { model.submitPrompt() } label: {
                             Image(systemName: "return").font(.system(size: 10, weight: .semibold))
                                 .foregroundStyle(IslandStyle.white(draft.canSend ? IslandStyle.secondary : IslandStyle.tertiary - 0.1))
+                                .frame(width: 18, height: IslandStyle.controlHeight)
+                                .contentShape(Rectangle())
                         }
+                        .buttonStyle(.plain)
+                        .disabled(!draft.canSend)
+                        .help("Send (↩)")
+                        .accessibilityLabel("Send")
                     }
-                    .frame(width: 18, height: IslandStyle.controlHeight)
-                    .accessibilityHidden(true)
                 }
                 .padding(.trailing, 6)
             }
