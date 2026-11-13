@@ -6,7 +6,7 @@ import NodchCore
         parserChecks()
         mappingChecks()
         answerMappingChecks()
-        do { try configurationChecks(); try await transportChecks(); try await uploadChecks(); try await answerChecks() }
+        do { try configurationChecks(); try await transportChecks(); try await uploadChecks(); try await answerChecks(); try await retryChecks() }
         catch { check(false, "client checks: \(error)") }
     }
 
