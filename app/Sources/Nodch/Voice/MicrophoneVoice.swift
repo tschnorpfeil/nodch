@@ -20,6 +20,12 @@ enum VoiceEvent: Equatable {
     /// The microphone is released before this returns. `finalize`: the words already heard still come in, then
     /// `.finished`; otherwise nothing more arrives.
     func stop(finalize: Bool)
+    /// Gets ready for the next `start` without the microphone: no permission asked, nothing recorded.
+    func prepare()
+}
+
+extension VoiceSource {
+    func prepare() {}
 }
 
 /// The microphone through AVAudioEngine into `TranscriptionRun`. Every step of starting checks that it is still
@@ -40,6 +46,29 @@ final class MicrophoneVoice: VoiceSource {
     private var downloading = false
     /// How long Return waits for the last words before sending what it has.
     static let finalizeLimit: Duration = .milliseconds(1500)
+
+    /// Resolves the language and has macOS install or reserve its speech model in the background, so the first
+    /// ⌥Space after launch (or after another language was chosen) does not wait for it. Speech only: the microphone
+    /// and its permission are left alone until `start`.
+    func prepare() {
+        Task { [weak self] in
+            guard let locale = await SpeechSupport.locale() else { return }
+            if case .missing(let request) = await SpeechSupport.assets(for: SpeechSupport.transcriber(locale)) {
+                self?.download(request)
+            }
+        }
+    }
+
+    /// Apple's free download, once at a time. Often the model is on the Mac already and only needs reserving for
+    /// nodch, which takes a moment; a real download goes on in the background while the prompt works with the keyboard.
+    private func download(_ request: AssetInstallationRequest?) {
+        guard let request, !downloading else { return }
+        downloading = true
+        Task { [weak self] in
+            try? await request.downloadAndInstall()
+            self?.downloading = false
+        }
+    }
 
     func start(_ events: @escaping @MainActor (VoiceEvent) -> Void) {
         stop(finalize: false)
@@ -111,23 +140,16 @@ final class MicrophoneVoice: VoiceSource {
             guard await AVCaptureDevice.requestAccess(for: .audio) else { return fail(.microphoneDenied) }
         default: return fail(.microphoneDenied)
         }
+        // No lookup of the default capture device here: it took seconds on the first press after launch, and an
+        // input without channels below says the same.
         guard wanted() else { return }
-        guard AVCaptureDevice.default(for: .audio) != nil else { return fail(.noMicrophone) }
         guard let locale = await SpeechSupport.locale() else { return fail(.speechUnavailable) }
         let probe = SpeechSupport.transcriber(locale)
         switch await SpeechSupport.assets(for: probe) {
         case .installed: break
         case .unsupported: return fail(.speechUnavailable)
         case .missing(let request):
-            // Apple's free download. Often the model is on the Mac already and only needs reserving for nodch, which
-            // takes a moment; a real download goes on in the background while this prompt works with the keyboard.
-            if let request, !downloading {
-                downloading = true
-                Task { [weak self] in
-                    try? await request.downloadAndInstall()
-                    self?.downloading = false
-                }
-            }
+            download(request)
             var installed = false
             for _ in 0..<12 where !installed {
                 try? await Task.sleep(for: .milliseconds(250))
@@ -141,18 +163,28 @@ final class MicrophoneVoice: VoiceSource {
         let input = engine.inputNode
         let format = input.outputFormat(forBus: 0)
         guard format.channelCount > 0, format.sampleRate > 0 else { return fail(.noMicrophone) }
-        let run: TranscriptionRun
-        do { run = try await TranscriptionRun(locale: locale, source: format) } catch { return fail(.failed) }
-        guard wanted() else { await run.cancel(); return }
+        // The analyzer is built off the main actor while `engine.start()` (about half a second of hardware) runs here;
+        // what the microphone hears meanwhile waits in `feed` and goes to the analyzer first, so no word is lost.
+        async let building = TranscriptionRun(locale: locale, source: format)
+        let feed = PendingFeed()
         let meter = LevelMeter()
-        input.installTap(onBus: 0, bufferSize: 2048, format: format, block: Self.tap(run, meter: meter))
+        input.installTap(onBus: 0, bufferSize: 2048, format: format, block: Self.tap(feed, meter: meter))
         engine.prepare()
         do { try engine.start() } catch {
             input.removeTap(onBus: 0)
-            await run.cancel()
+            if let run = try? await building { await run.cancel() }
             return fail(.failed)
         }
+        // From here `stop` turns the microphone off, also while the analyzer is still being built.
         self.engine = engine
+        let run: TranscriptionRun
+        do { run = try await building } catch {
+            guard wanted() else { return }
+            releaseMicrophone()
+            return fail(.failed)
+        }
+        guard wanted() else { await run.cancel(); return }
+        feed.attach(run)
         self.run = run
         self.meter = meter
         delivering = run
@@ -163,6 +195,10 @@ final class MicrophoneVoice: VoiceSource {
                     events?(.heard(String(result.text.characters), final: result.isFinal))
                 }
             } catch {}
+            // Ended while still listening (an error, or the analyzer gave up): the microphone goes off and the card
+            // says so, instead of showing "Listening" over a dead transcriber. After `stop` this is not the run.
+            guard let self, self.run === run else { return }
+            recognitionEnded(run)
         }
         meterTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 15, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
@@ -173,11 +209,49 @@ final class MicrophoneVoice: VoiceSource {
         events?(.started(language: locale.identifier(.bcp47)))
     }
 
+    private func recognitionEnded(_ run: TranscriptionRun) {
+        releaseMicrophone()
+        self.run = nil
+        reading = nil
+        delivering = nil
+        let events = events
+        self.events = nil
+        Task { await run.cancel() }
+        events?(.unavailable(.failed))
+    }
+
     /// The audio thread calls this block, not the main thread: built outside the main actor, or Swift 6 traps.
-    private nonisolated static func tap(_ run: TranscriptionRun, meter: LevelMeter) -> AVAudioNodeTapBlock {
+    private nonisolated static func tap(_ feed: PendingFeed, meter: LevelMeter) -> AVAudioNodeTapBlock {
         { buffer, _ in
-            run.feed(buffer)
+            feed.add(buffer)
             meter.add(buffer)
+        }
+    }
+}
+
+/// Between the microphone and the analyzer: buffers heard before the analyzer is ready are kept (copied, the engine
+/// reuses its own) and handed over first, in order. Up to about ten seconds; the analyzer is usually there in well
+/// under one.
+private final class PendingFeed: @unchecked Sendable {
+    private let lock = NSLock()
+    private var run: TranscriptionRun?
+    private var waiting: [AVAudioPCMBuffer] = []
+
+    func add(_ buffer: AVAudioPCMBuffer) {
+        lock.withLock {
+            if let run {
+                run.feed(buffer)
+            } else if waiting.count < 250, let copy = buffer.copy() as? AVAudioPCMBuffer {
+                waiting.append(copy)
+            }
+        }
+    }
+
+    func attach(_ run: TranscriptionRun) {
+        lock.withLock {
+            for buffer in waiting { run.feed(buffer) }
+            waiting = []
+            self.run = run
         }
     }
 }

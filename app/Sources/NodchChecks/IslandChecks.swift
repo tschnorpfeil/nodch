@@ -11,5 +11,6 @@ import NodchCore
         answers()
         speech()
         speechPrompt()
+        dictationTakeover()
     }
 }

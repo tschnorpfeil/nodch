@@ -156,6 +156,8 @@ import Observation
         if let id { UserDefaults.standard.set(id, forKey: SpeechLanguage.defaultsKey) } else {
             UserDefaults.standard.removeObject(forKey: SpeechLanguage.defaultsKey)
         }
+        // The new language's speech model gets ready in the background, also when the microphone is off now.
+        voice?.prepare()
         perform(draft.languageChanged())
     }
 

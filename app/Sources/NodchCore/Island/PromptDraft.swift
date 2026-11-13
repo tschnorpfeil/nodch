@@ -89,6 +89,10 @@ public struct PromptDraft: Equatable, Sendable {
 
     /// What the field shows.
     public var display: String { Self.join(text, volatile) }
+    /// While the microphone is on, the card shows the words itself instead of relying on the focused field, which
+    /// may not take changes from outside while it is being edited: `heard` bright, `hearing` (still being recognized,
+    /// with the space before it) dimmed. Together they are `display`.
+    public var live: (heard: String, hearing: String) { (text, String(display.dropFirst(text.count))) }
     public var ready: [NodAttachment] {
         attachments.compactMap { if case .ready(let file) = $0.status { file } else { nil } }
     }
@@ -185,7 +189,12 @@ public struct PromptDraft: Equatable, Sendable {
     public mutating func typed(_ value: String) -> [PromptEffect] {
         guard value != display, !sending, voice != .finishing else { return [] }
         let effects: [PromptEffect] = voice.isActive ? [.stopVoice(finalize: false)] : []
-        if voice.isActive { voice = .off }
+        if voice.isActive {
+            voice = .off
+            text = Self.takeOver(display, edited: value)
+            volatile = ""
+            return effects
+        }
         text = value
         volatile = ""
         if notice == Self.waitsForUploads { notice = nil }
@@ -322,6 +331,22 @@ public struct PromptDraft: Equatable, Sendable {
         guard let last = head.last else { return tail }
         if last.isWhitespace || tail.first.map({ ",.;:!?)".contains($0) }) == true { return head + tail }
         return head + " " + tail
+    }
+
+    /// The first keystroke while the microphone was on. The focused field may still hold an older text than what was
+    /// heard (it does not always take the transcriber's words while it is being edited), so `edited` is that older
+    /// text plus the keystroke. Reading it literally would throw the dictation away; instead the keystroke goes where
+    /// the person saw the caret, at the end of everything heard. Edits that fit the full text are taken as they are:
+    /// typing at its end, one Backspace, or an insertion inside it.
+    public static func takeOver(_ heard: String, edited: String) -> String {
+        if edited.hasPrefix(heard) { return edited }
+        if heard.hasPrefix(edited), edited.count == heard.count - 1 { return edited }
+        var shared = zip(edited, heard).prefix { $0 == $1 }.count
+        let rest = heard.dropFirst(shared)
+        if edited.count > heard.count, !rest.isEmpty, edited.hasSuffix(rest) { return edited }
+        // A space typed after the older text belongs to the keystroke: "Please summarize" + " and" adds " and".
+        while shared > 0, edited[edited.index(edited.startIndex, offsetBy: shared - 1)].isWhitespace { shared -= 1 }
+        return heard + edited.dropFirst(shared)
     }
 
     private mutating func keepVolatile() {

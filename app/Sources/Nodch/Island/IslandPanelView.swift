@@ -1,4 +1,5 @@
 // Adapted from Pippa: app/Sources/Pippa/Views/IslandViews.swift (IslandPanelView, IslandButtonStyle, IslandButtonRow)
+import AppKit
 import NodchCore
 import SwiftUI
 
@@ -132,6 +133,8 @@ struct IslandPromptCard: View {
             if model.tone != .rest, model.tone != .done, model.asking == nil {
                 Text(statusLine).lineLimit(1).truncationMode(.tail)
                 .font(IslandStyle.small).foregroundStyle(IslandStyle.white(IslandStyle.secondary))
+                // A new line replaces the old one at once: under the card's fade the two showed on top of each other.
+                .contentTransition(.identity).transaction { $0.animation = nil }
                 .accessibilityElement(children: .combine)
             }
             HStack(alignment: .top, spacing: IslandStyle.buttonGap) {
@@ -151,15 +154,24 @@ struct IslandPromptCard: View {
     private func field(_ draft: PromptDraft) -> some View {
         // The transcriber writes `draft` directly; only the person's own edits come through the binding.
         let text = Binding(get: { model.draft.display }, set: { model.typed($0) })
-        return TextField("Ask Nod", text: text, prompt: Text(placeholder(draft)).foregroundStyle(IslandStyle.white(IslandStyle.secondary)),
-                         axis: .vertical)
-            .lineLimit(1...5)
-            .textFieldStyle(.plain)
+        // While the microphone is on, the words show in `live` on top of the field. The focused field does not
+        // reliably take the transcriber's words while it is being edited (it stayed empty mid-sentence), so its own
+        // text is hidden then; it keeps the focus, so the first keystroke still takes over (`PromptDraft.takeOver`).
+        let live = draft.voice.isActive
+        return ZStack(alignment: .topLeading) {
+            TextField("Ask Nod", text: text,
+                      prompt: Text(live ? "" : placeholder(draft)).foregroundStyle(IslandStyle.white(IslandStyle.secondary)),
+                      axis: .vertical)
+                .lineLimit(1...5)
+                .textFieldStyle(.plain)
+                .foregroundStyle(live ? Color.clear : IslandStyle.white(IslandStyle.primary))
+                .focused(focused)
+                .disabled(draft.sending || draft.voice == .finishing)
+                .onSubmit { model.submitPrompt() }
+            if live { liveWords(draft) }
+        }
             .font(IslandStyle.body)
-            .foregroundStyle(IslandStyle.white(draft.voice == .listening ? IslandStyle.primary - 0.05 : IslandStyle.primary))
-            .focused(focused)
-            .disabled(draft.sending || draft.voice == .finishing)
-            .onSubmit { model.submitPrompt() }
+            .onChange(of: draft.display) { IslandFieldEditor.show(model.draft.display) }
             .padding(.vertical, 6)
             .padding(.trailing, 50)
             .padding(.horizontal, 10)
@@ -184,6 +196,26 @@ struct IslandPromptCard: View {
             .accessibilityLabel("Ask Nod")
             .accessibilityHint(draft.voice == .listening ? "Listening. Typing takes over, Return sends, Escape discards"
                                                         : "Return sends, Escape discards")
+    }
+
+    /// What was heard so far, the words still being recognized dimmed after it, or where the microphone is at.
+    private func liveWords(_ draft: PromptDraft) -> some View {
+        let (heard, hearing) = draft.live
+        var words = AttributedString(heard)
+        words.foregroundColor = IslandStyle.white(IslandStyle.primary)
+        var pending = AttributedString(hearing)
+        pending.foregroundColor = IslandStyle.white(IslandStyle.secondary)
+        words.append(pending)
+        return Group {
+            if draft.display.isEmpty {
+                Text(placeholder(draft)).foregroundStyle(IslandStyle.white(IslandStyle.secondary))
+            } else {
+                // The newest words stay in view: a long dictation loses its start, not its end.
+                Text(words).lineLimit(5).truncationMode(.head)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .allowsHitTesting(false)
     }
 
     private func placeholder(_ draft: PromptDraft) -> String {
@@ -236,6 +268,19 @@ struct IslandPromptCard: View {
         case .working: "Working: \(model.line)"
         default: model.line
         }
+    }
+}
+
+/// The focused field's editor, from AppKit. SwiftUI may leave it at an older text when the binding changes from
+/// outside (the transcriber) while it is being edited; then the next keystroke would edit that older text. `show`
+/// puts the draft's text into it, caret at the end. A no-op when the editor already shows it, holds an unfinished
+/// input-method composition, or is not the island's.
+@MainActor enum IslandFieldEditor {
+    static func show(_ text: String) {
+        guard let window = NSApp.keyWindow as? IslandPanel, let editor = window.firstResponder as? NSTextView,
+              editor.isFieldEditor, !editor.hasMarkedText(), editor.string != text else { return }
+        editor.string = text
+        editor.setSelectedRange(NSRange(location: (text as NSString).length, length: 0))
     }
 }
 
