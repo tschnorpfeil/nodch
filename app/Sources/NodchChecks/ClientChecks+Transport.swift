@@ -167,8 +167,11 @@ extension ClientChecks {
         reconnecting.disconnect()
         let reconnectRequests = ClientStub.requests
         check(reconnectRequests.filter { $0.url?.path == "/api/events" }.count >= 3 && reconnectRequests.filter { $0.url?.path == "/api/state" }.count >= 3, "every SSE reconnect refetches state without a refresh event")
-        let count = reconnectRequests.count
+        // A request resumed just before `disconnect` reaches the stub (`startLoading`) on URLSession's own thread and
+        // may be counted a moment later. Let those land; after that a reconnect loop (every 20–40 ms) would still show.
         try await Task.sleep(for: .milliseconds(100))
+        let count = ClientStub.requests.count
+        try await Task.sleep(for: .milliseconds(200))
         check(ClientStub.requests.count == count, "disconnect cancels reconnects")
 
         ClientStub.configure { request in
