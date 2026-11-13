@@ -81,6 +81,9 @@ extension ClientChecks {
         }) ?? nil, let json = try JSONSerialization.jsonObject(with: body) as? [String: Any] {
             let answer = json["approvalAnswer"] as? [String: Any]
             check(json["replyToMessageId"] as? String == approval.messageID && answer?["approvalId"] as? String == approval.id && answer?["approved"] as? Bool == true && UUID(uuidString: json["clientMessageId"] as? String ?? "") != nil && json["text"] as? String == "Yes", "approval JSON uses message ID, approval ID, explicit decision and client UUID")
+            // Nod stores UUIDs lowercase and answers with them: an uppercase id would not match the stored message.
+            let id = json["clientMessageId"] as? String ?? ""
+            check(id == id.lowercased(), "client message ID is lowercase, as Nod returns it")
         } else { check(false, "approval body present") }
         session.disconnect()
 

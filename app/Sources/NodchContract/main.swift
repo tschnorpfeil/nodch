@@ -23,6 +23,35 @@ import NodchCore
         try await Task.sleep(for: .milliseconds(20))
     }
     try require(session.store.state == .rest, "SSE connects and loads initial state")
+    _ = try await client.send(prompt: "Nodch contract: propose pausing proactive notifications and ask for confirmation.")
+    print("PASS send prompt -> accepted")
+    let deadline = Date().addingTimeInterval(60)
+    var pending: PendingApproval?
+    while Date() < deadline {
+        if case .needsYou(let approval, _) = session.store.state { pending = approval; break }
+        try await Task.sleep(for: .milliseconds(50))
+    }
+    guard let approval = pending else { throw NodClientError.configuration("No approval via SSE + state: \(session.store.state)") }
+    print("PASS SSE + state -> IslandState.needsYou")
+    try await session.answer(approval: approval, approved: true)
+    print("PASS approve -> accepted")
+    do { try await session.answer(approval: approval, approved: true); throw NodClientError.configuration("Duplicate approval succeeded") }
+    catch NodClientError.conflict { print("PASS duplicate approval -> 409 (no retry)") }
+    try await session.stop()
+    let settled = Date().addingTimeInterval(20)
+    while Date() < settled {
+        switch session.store.state {
+        case .working, .needsYou: try await Task.sleep(for: .milliseconds(50)); continue
+        default: break
+        }
+        break
+    }
+    switch session.store.state {
+    case .working, .needsYou: throw NodClientError.configuration("Still busy after stop: \(session.store.state)")
+    default: print("PASS stop -> accepted, island settles (\(session.store.state))")
+    }
+    // Last: Nod hands an attached file to its workspace runtime, which this minimal fixture does not provide, so the
+    // turn it starts may fail. The contract is only that the upload reaches Nod and the message carries it.
     let directory = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
         .appendingPathComponent(".build/contract-upload-\(UUID().uuidString)")
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -52,31 +81,6 @@ import NodchCore
     try require(message?.text == "" && stored?.id == attachment.id && stored?.name == attachment.name &&
                 stored?.mimeType == attachment.mimeType && stored?.size == attachment.size,
                 "GET state -> sent message carries uploaded attachment")
-    let deadline = Date().addingTimeInterval(60)
-    var pending: PendingApproval?
-    while Date() < deadline {
-        if case .needsYou(let approval, _) = session.store.state { pending = approval; break }
-        try await Task.sleep(for: .milliseconds(50))
-    }
-    guard let approval = pending else { throw NodClientError.configuration("No approval via SSE + state: \(session.store.state)") }
-    print("PASS SSE + state -> IslandState.needsYou")
-    try await session.answer(approval: approval, approved: true)
-    print("PASS approve -> accepted")
-    do { try await session.answer(approval: approval, approved: true); throw NodClientError.configuration("Duplicate approval succeeded") }
-    catch NodClientError.conflict { print("PASS duplicate approval -> 409 (no retry)") }
-    try await session.stop()
-    let settled = Date().addingTimeInterval(20)
-    while Date() < settled {
-        switch session.store.state {
-        case .working, .needsYou: try await Task.sleep(for: .milliseconds(50)); continue
-        default: break
-        }
-        break
-    }
-    switch session.store.state {
-    case .working, .needsYou: throw NodClientError.configuration("Still busy after stop: \(session.store.state)")
-    default: print("PASS stop -> accepted, island settles (\(session.store.state))")
-    }
 }
 
 do { try await run() }

@@ -56,7 +56,7 @@ public final class NodClient: Sendable {
         guard !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !attachments.isEmpty else {
             throw NodClientError.invalidInput("Write a message or attach a file before sending.")
         }
-        return try await submit(MessageInput(text: prompt, clientMessageId: UUID().uuidString,
+        return try await submit(MessageInput(text: prompt, clientMessageId: UUID().uuidString.lowercased(),
                                              attachmentIds: attachments.map(\.id)))
     }
 
@@ -105,7 +105,7 @@ public final class NodClient: Sendable {
     }
 
     public func answer(approval: PendingApproval, approved: Bool) async throws -> NodSubmission {
-        try await submit(MessageInput(text: approved ? "Yes" : "No", clientMessageId: UUID().uuidString,
+        try await submit(MessageInput(text: approved ? "Yes" : "No", clientMessageId: UUID().uuidString.lowercased(),
                                       replyToMessageId: approval.messageID,
                                       approvalAnswer: .init(approvalId: approval.id, approved: approved)))
     }
