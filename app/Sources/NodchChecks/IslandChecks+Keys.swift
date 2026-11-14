@@ -22,13 +22,25 @@ extension IslandChecks {
         check(kept.display == "Summarize my mail from today" && kept.attachments.count == 1,
               "keys: the hidden draft keeps its words and files for the next open")
 
-        // Return under a question that just appeared waits like a click; a new prompt or files are not answers.
-        check(!P.acceptsTypedSubmit(answersQuestion: true, attachments: 0, shownFor: 0.2)
-              && P.acceptsTypedSubmit(answersQuestion: true, attachments: 0, shownFor: P.answerGuard),
+        // Return under a question that just appeared waits like a click; a new prompt or uploaded files are not answers.
+        var words = PromptDraft()
+        _ = words.open(.click)
+        _ = words.typed("the second one")
+        check(!P.acceptsTypedSubmit(question: true, draft: words, shownFor: 0.2)
+              && P.acceptsTypedSubmit(question: true, draft: words, shownFor: P.answerGuard),
               "keys: Return answers Nod's fresh question only after the guard")
-        check(P.acceptsTypedSubmit(answersQuestion: false, attachments: 0, shownFor: 0)
-              && P.acceptsTypedSubmit(answersQuestion: true, attachments: 1, shownFor: 0),
-              "keys: a new prompt, or files under a question, send at once")
+        var withFiles = words
+        let effects = withFiles.drop([DroppedFile(url: URL(fileURLWithPath: "/tmp/drop/a.pdf"), isDirectory: false),
+                                  DroppedFile(url: URL(fileURLWithPath: "/tmp/drop/b.pdf"), isDirectory: false)])
+        let ids = effects.compactMap { effect -> Int? in if case .upload(let id, _) = effect { id } else { nil } }
+        var failed = withFiles
+        if let first = ids.first { failed.uploadFailed(first, reason: "Too large") }
+        if ids.count == 2 { withFiles.uploaded(ids[1], as: NodAttachment(id: "f1", name: "b.pdf", mimeType: "application/pdf", size: 1)) }
+        check(P.acceptsTypedSubmit(question: false, draft: words, shownFor: 0)
+              && P.acceptsTypedSubmit(question: true, draft: withFiles, shownFor: 0),
+              "keys: a new prompt, or uploaded files under a question, send at once")
+        check(ids.count == 2 && !P.acceptsTypedSubmit(question: true, draft: failed, shownFor: 0.2),
+              "keys: a failed file does not let the words answer before the guard")
 
         // The approval card: ⌥Return approves, ⌥⌫ declines, never plain Return; ⌘. stops a running turn.
         let approvalCard = P.CardOffers(approval: true)

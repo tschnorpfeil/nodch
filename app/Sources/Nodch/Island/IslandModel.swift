@@ -179,7 +179,7 @@ import Observation
     /// Return: sends once, after the microphone is off. On success the card closes; on failure the text stays with
     /// the error under it.
     func submitPrompt() {
-        guard IslandPresentation.acceptsTypedSubmit(answersQuestion: asking != nil, attachments: draft.attachments.count,
+        guard IslandPresentation.acceptsTypedSubmit(question: asking != nil, draft: draft,
                                                     shownFor: Date().timeIntervalSince(approvalShownAt)) else { return }
         perform(draft.submit())
     }
