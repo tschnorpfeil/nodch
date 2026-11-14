@@ -313,6 +313,8 @@ public struct PromptDraft: Equatable, Sendable {
 
     public static let waitsForUploads = "Return sends once the files are uploaded."
     public static let folderRefused = "Folders can’t be attached. Drop the files inside instead."
+    /// A drop that brought nothing: a promise the other app didn't keep, or files gone before nodch could read them.
+    public static let nothingArrived = "Nothing arrived from that drop. Drag it onto nodch again."
 
     /// Which of the dropped files become chips: no folders, none twice, at most `maxAttachments` in all.
     public static func accept(_ files: [DroppedFile], existing: [URL] = []) -> (accepted: [URL], notice: String?) {
@@ -323,6 +325,7 @@ public struct PromptDraft: Equatable, Sendable {
             if existing.count + accepted.count < maxAttachments { accepted.append(file.url) } else { over += 1 }
         }
         var notes: [String] = []
+        if files.isEmpty { notes.append(nothingArrived) }
         if folders > 0 { notes.append(folderRefused) }
         if over > 0 { notes.append("Up to \(maxAttachments) files: \(over) left out.") }
         return (accepted, notes.isEmpty ? nil : notes.joined(separator: " "))

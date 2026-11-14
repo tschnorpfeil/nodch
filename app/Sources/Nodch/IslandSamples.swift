@@ -224,6 +224,8 @@ final class DemoScript {
                 guard let self else { return }
                 for (seconds, state) in Self.steps() {
                     print("demo: state → \(Self.name(state))")
+                    // A turn that ends brings its answer, so the closed island can say "Answer ready".
+                    if case .done = state { store.answer = NodAnswer(id: UUID().uuidString, text: IslandSamples.answer.text, at: Date()) }
                     store.state = state
                     try? await Task.sleep(for: .seconds(seconds))
                 }

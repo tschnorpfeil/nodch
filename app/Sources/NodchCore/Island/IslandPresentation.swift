@@ -52,20 +52,56 @@ public enum IslandPresentation {
     public static func answerGuardRemaining(shownFor age: TimeInterval) -> TimeInterval { max(0, answerGuard - age) }
 
     /// `doneAge`: seconds since the island first showed the current `.done`; nil if it has not shown it yet.
-    public static func tone(_ state: IslandState, doneAge: TimeInterval? = nil) -> IslandTone {
+    /// `answerReady`: Nod answered while the card was closed and the person has not opened it since; "done" then stays
+    /// until they look, like a message waiting to be read, also after the session has turned "done" back into rest.
+    public static func tone(_ state: IslandState, doneAge: TimeInterval? = nil, answerReady: Bool = false) -> IslandTone {
         switch state {
         case .offline: .offline
-        case .rest: .rest
+        case .rest: answerReady ? .done : .rest
         case .working: .working
         case .needsYou, .asks: .needsYou
-        case .done: (doneAge ?? 0) >= doneDuration ? .rest : .done
+        case .done: !answerReady && (doneAge ?? 0) >= doneDuration ? .rest : .done
         case .failed: .failed
         }
     }
 
+    /// The closed island's words for an answer nobody has read yet. Not the answer's first line: cut to the wing's
+    /// width it reads as the whole answer.
+    public static let answerReadyLine = "Answer ready"
+
+    /// Nod answered while the card was closed: the person sent or followed this turn and is not looking at it.
+    public static func answerArrived(from old: IslandState, to new: IslandState, open: Bool, answer: NodAnswer?) -> Bool {
+        guard case .done = new, !open, answer != nil else { return false }
+        if case .done = old { return false }
+        return true
+    }
+
+    /// New work, an approval, a question or a failure takes over from an unread answer; a dropped connection does not.
+    public static func endsAnswerReady(_ state: IslandState) -> Bool {
+        [.working, .needsYou, .failed].contains(tone(state))
+    }
+
+    /// What VoiceOver hears when the island changes by itself; nil when nothing new needs the person.
+    public static func announcement(from old: IslandState, to new: IslandState, answerArrived: Bool) -> String? {
+        if answerArrived { return "Nod’s answer is ready" }
+        if waitingID(new) != waitingID(old) {
+            switch new {
+            case .needsYou(let approval, _): return "Nod needs you: " + (nonEmpty(approval.title) ?? "an approval")
+            case .asks: return "Nod has a question"
+            default: break
+            }
+        }
+        if case .failed(let message) = new {
+            if case .failed = old { return nil }
+            return "Nod couldn’t finish: " + (nonEmpty(message) ?? "something went wrong")
+        }
+        return nil
+    }
+
     /// The wing's line: the step and site while Nod works (the title when there is no step), the approval's title,
     /// the summary or the error.
-    public static func line(_ state: IslandState) -> String {
+    public static func line(_ state: IslandState, answerReady: Bool = false) -> String {
+        if answerReady, tone(state, answerReady: true) == .done { return answerReadyLine }
         switch state {
         case .offline: return "Nod is offline"
         case .rest: return ""
@@ -86,9 +122,10 @@ public enum IslandPresentation {
     }
 
     /// The answer the prompt shows above its field: an open question always, otherwise a recent answer.
-    public static func shownAnswer(_ answer: NodAnswer?, state: IslandState, now: Date = Date()) -> NodAnswer? {
+    /// `kept`: the id of an answer that arrived while the card was closed; it shows however late it is opened.
+    public static func shownAnswer(_ answer: NodAnswer?, state: IslandState, now: Date = Date(), kept: String? = nil) -> NodAnswer? {
         if case .asks(let asked) = state { return asked }
-        guard let answer, now.timeIntervalSince(answer.at) < followUpWindow else { return nil }
+        guard let answer, answer.id == kept || now.timeIntervalSince(answer.at) < followUpWindow else { return nil }
         return answer
     }
 

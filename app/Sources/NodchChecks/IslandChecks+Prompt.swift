@@ -133,6 +133,8 @@ extension IslandChecks {
         // Drops.
         let folder = PromptDraft.accept([file("Photos", folder: true), file("a.pdf")])
         check(folder.accepted.map(\.lastPathComponent) == ["a.pdf"] && folder.notice == PromptDraft.folderRefused, "drop: folder rejected with a hint")
+        check(PromptDraft.accept([]).accepted.isEmpty && PromptDraft.accept([]).notice == PromptDraft.nothingArrived,
+              "drop: a drop that brought nothing says so instead of vanishing")
         let many = PromptDraft.accept((1...12).map { file("f\($0).txt") })
         check(many.accepted.count == PromptDraft.maxAttachments && many.notice?.contains("2 left out") == true, "drop: more than 10 capped")
         var capped = PromptDraft()

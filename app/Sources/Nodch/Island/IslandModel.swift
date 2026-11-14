@@ -11,6 +11,10 @@ import Observation
     var hovering = false
     /// The current `.done` has shown long enough: the island reads it as rest.
     var doneExpired = false
+    /// Nod answered while the card was closed and nobody opened it since: the island says "Answer ready" until then.
+    var answerReady = false
+    /// That answer's id: the card shows it when opened, however late (`IslandPresentation.shownAnswer`).
+    var keptAnswerID: String?
     var isOpen = false
     /// The open card shows the quick prompt instead of the state.
     var showsPrompt = false
@@ -80,8 +84,8 @@ import Observation
     init(store: IslandStore) { self.store = store }
 
     var state: IslandState { store.state }
-    var tone: IslandTone { IslandPresentation.tone(store.state, doneAge: doneExpired ? .infinity : 0) }
-    var line: String { IslandPresentation.line(store.state) }
+    var tone: IslandTone { IslandPresentation.tone(store.state, doneAge: doneExpired ? .infinity : 0, answerReady: answerReady) }
+    var line: String { IslandPresentation.line(store.state, answerReady: answerReady) }
     var wing: IslandWing? {
         if dropZone != .none, !isOpen { return IslandWing() }
         return IslandPresentation.wing(store.state, tone: tone, hovering: hovering && !isOpen)
@@ -109,7 +113,7 @@ import Observation
     /// Nod's question that waits for the person's pick or own words.
     var asking: NodAnswer? { if case .asks(let answer) = store.state { answer } else { nil } }
     /// The answer above the prompt field: the open question, or the last answer while a follow-up still reads in context.
-    var shownAnswer: NodAnswer? { IslandPresentation.shownAnswer(store.answer, state: store.state) }
+    var shownAnswer: NodAnswer? { IslandPresentation.shownAnswer(store.answer, state: store.state, kept: keptAnswerID) }
     /// Choices ticked on a question that takes several.
     var picked: Set<String> = []
     var highlightedChoice: String?

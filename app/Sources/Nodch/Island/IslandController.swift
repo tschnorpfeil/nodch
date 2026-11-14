@@ -61,6 +61,7 @@ final class IslandController {
             guard let self else { return }
             openCause = nil
             model.isOpen = false
+            if !model.answerReady { model.keptAnswerID = nil }
             model.highlightedChoice = nil
             model.perform(model.draft.closed())
         }
@@ -110,6 +111,22 @@ final class IslandController {
             doneTimer?.cancel()
             doneTimer = nil
             model.doneExpired = false
+        }
+        // A card that opened by itself for an approval folds away now: its person is not reading along.
+        let arrived = IslandPresentation.answerArrived(from: old, to: new, open: model.isOpen && openCause != .approval,
+                                                       answer: model.store.answer)
+        if arrived {
+            model.answerReady = true
+            model.keptAnswerID = model.store.answer?.id
+            NSHapticFeedbackManager.defaultPerformer.perform(.levelChange, performanceTime: .now)
+        } else if model.answerReady, IslandPresentation.endsAnswerReady(new) {
+            // New work, a question, an approval or a failure takes the island; the unread answer still opens with the
+            // prompt. A dropped connection (offline) does not: once back, the island says "Answer ready" again.
+            model.answerReady = false
+        }
+        if let text = IslandPresentation.announcement(from: old, to: new, answerArrived: arrived) {
+            NSAccessibility.post(element: NSApp as Any, notification: .announcementRequested,
+                                 userInfo: [.announcement: text, .priority: NSAccessibilityPriorityLevel.high.rawValue])
         }
         let newQuestion = IslandPresentation.newQuestion(from: old, to: new)
         if IslandPresentation.waitingID(old) != IslandPresentation.waitingID(new) {
@@ -233,6 +250,8 @@ final class IslandController {
         }
         openCause = cause
         model.isOpen = true
+        // Opened, so read: the island stops saying "Answer ready".
+        model.answerReady = false
         presenter.open(key: IslandPresentation.takesKey(cause))
         if IslandPresentation.takesKey(cause), model.showsPrompt { model.focusToken += 1 }
         refresh()
@@ -341,7 +360,7 @@ final class IslandController {
     private func dropped(_ files: [DroppedFile]) {
         dragEnd?.cancel()
         setDropZone(.none)
-        guard !files.isEmpty else { return }
+        // An empty drop still opens the prompt: its notice says nothing arrived, instead of the drop vanishing.
         let front = NSWorkspace.shared.frontmostApplication
         if front?.processIdentifier != ProcessInfo.processInfo.processIdentifier { previousApp = front }
         if model.isOpen {
