@@ -29,6 +29,11 @@ final class IslandPanel: NSPanel {
 
     override var canBecomeKey: Bool { allowsKey }
     override var canBecomeMain: Bool { false }
+    /// ⌘A, ⌘C, ⌘V, ⌘X and ⌘Z in the prompt: no menu bar would deliver them.
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if isKeyWindow, EditShortcuts.perform(event, from: self) { return true }
+        return super.performKeyEquivalent(with: event)
+    }
     override func constrainFrameRect(_ frameRect: NSRect, to screen: NSScreen?) -> NSRect { frameRect }
 }
 

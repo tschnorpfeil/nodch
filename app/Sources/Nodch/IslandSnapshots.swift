@@ -19,6 +19,8 @@ enum IslandSnapshots {
         var picked: Set<String> = []
         /// The click guard still holds: Approve, Decline and the choices show dimmed.
         var guarded = false
+        /// Nod answered while the card was closed; nobody opened it yet.
+        var answerReady = false
     }
 
     static let scenes: [Scene] = [
@@ -37,6 +39,7 @@ enum IslandSnapshots {
         Scene(name: "needs-you-cut", state: .needsYou(IslandSamples.cutNote, more: 2), open: true),
         Scene(name: "done", state: IslandSamples.done),
         Scene(name: "done-markdown", state: IslandSamples.answerDone, answer: IslandSamples.answer),
+        Scene(name: "answer-ready", state: .rest, answer: IslandSamples.answer, answerReady: true),
         Scene(name: "answer-open", state: IslandSamples.answerDone, open: true, prompt: PromptDraft(), answer: IslandSamples.answer),
         Scene(name: "prompt-follow-up", state: .rest, open: true, prompt: PromptDraft(), answer: IslandSamples.answer),
         Scene(name: "asks", state: .asks(IslandSamples.question)),
@@ -106,6 +109,7 @@ enum IslandSnapshots {
         model.picked = scene.picked
         model.hovering = scene.hovering
         model.isOpen = scene.open
+        model.answerReady = scene.answerReady
         if let prompt = scene.prompt {
             model.showsPrompt = true
             model.draft = prompt

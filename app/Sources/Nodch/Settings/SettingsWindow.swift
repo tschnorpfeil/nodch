@@ -1,22 +1,13 @@
 import AppKit
 import SwiftUI
 
-/// The Settings window. nodch has no menu bar of its own, so the window handles the edit shortcuts (⌘X, ⌘C, ⌘V, ⌘A,
-/// ⌘Z) and ⌘W itself; a token is usually pasted.
+/// The Settings window. nodch has no menu bar of its own, so the window handles the edit shortcuts (`EditShortcuts`)
+/// and ⌘W itself; a token is usually pasted.
 final class SettingsWindow: NSWindow {
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if EditShortcuts.perform(event, from: self) { return true }
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-        let action: Selector? = switch (flags, event.charactersIgnoringModifiers) {
-        case (.command, "x"): #selector(NSText.cut(_:))
-        case (.command, "c"): #selector(NSText.copy(_:))
-        case (.command, "v"): #selector(NSText.paste(_:))
-        case (.command, "a"): #selector(NSText.selectAll(_:))
-        case (.command, "z"): Selector(("undo:"))
-        case ([.command, .shift], "z"), ([.command, .shift], "Z"): Selector(("redo:"))
-        case (.command, "w"): #selector(NSWindow.performClose(_:))
-        default: nil
-        }
-        if let action, NSApp.sendAction(action, to: nil, from: self) { return true }
+        if flags == .command, event.charactersIgnoringModifiers == "w" { performClose(nil); return true }
         return super.performKeyEquivalent(with: event)
     }
 }

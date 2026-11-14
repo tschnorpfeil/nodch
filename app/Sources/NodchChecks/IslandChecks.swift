@@ -14,5 +14,6 @@ import NodchCore
         dictationTakeover()
         keys()
         promiseDrops()
+        answerReady()
     }
 }

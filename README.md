@@ -13,8 +13,8 @@ working on. It does a few things and hands everything else to Nod:
 - **Ask.** <kbd>⌥ Space</kbd> opens a prompt and starts listening. Speak, and your words appear as you say them; type,
   and the microphone steps aside. Drop files on the island to send them along.
 - **Follow.** While Nod works, the island shows the current step and a timer, with a Stop button.
-- **Read.** Nod's answer shows in full, with its formatting, and stays above the prompt for ten minutes so you can
-  follow up.
+- **Read.** When Nod finishes while the island is closed, it says **Answer ready** until you open it. The answer
+  shows in full, with its formatting, above the prompt, so you can follow up.
 - **Answer.** When Nod asks you something, its choices are buttons and the keyboard is already in nodch: pick with
   the arrow keys or type your own answer.
 - **Approve.** When Nod wants to act, for example send an email, you see the full action and decide. Nothing is

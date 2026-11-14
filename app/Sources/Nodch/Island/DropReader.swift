@@ -17,7 +17,7 @@ enum DropReader {
             if !files.isEmpty { return completion(files.map(describe)) }
         }
         guard let receivers = board.readObjects(forClasses: [NSFilePromiseReceiver.self], options: nil) as? [NSFilePromiseReceiver],
-              !receivers.isEmpty, let folder = try? freshFolder() else { return completion([]) }
+              !receivers.isEmpty else { return completion([]) }
         let queue = OperationQueue()
         queue.qualityOfService = .userInitiated
         // A promise may stand for several files; their names are known only after receiving starts. Hold the
@@ -25,10 +25,16 @@ enum DropReader {
         queue.isSuspended = true
         let collector = PromiseCollector()
         let reader = promiseReader(collector) { urls in completion(urls.map(describe)) }
+        // A folder per promise: two mails with the same subject would otherwise share one name. The receiver then
+        // names the second "… 2.eml", but Mail writes both to the plain name, so the second file never exists.
+        var started = 0
         for receiver in receivers {
+            guard let folder = try? freshFolder() else { continue }
             receiver.receivePromisedFiles(atDestination: folder, options: [:], operationQueue: queue, reader: reader)
             collector.expect(max(1, receiver.fileNames.count))
+            started += 1
         }
+        guard started > 0 else { return completion([]) }
         queue.isSuspended = false
     }
 
