@@ -13,5 +13,6 @@ import NodchCore
         speechPrompt()
         dictationTakeover()
         keys()
+        promiseDrops()
     }
 }
