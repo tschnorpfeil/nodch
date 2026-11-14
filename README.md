@@ -80,7 +80,7 @@ too.
 | You see | Do |
 |---|---|
 | "Nothing answers at …" | Start Nod, or fix the address in Settings. |
-| "doesn't accept this host name" (403) | Use the host from Nod's `NOD_PUBLIC_URL`, usually `localhost`, not `127.0.0.1`. |
+| "doesn’t accept this host name" (403) | Use the host from Nod's `NOD_PUBLIC_URL`, usually `localhost`, not `127.0.0.1`. |
 | "Nod rejected the token" (401) | Paste `NOD_AUTH_TOKEN` from Nod's `.env` into Settings. |
 | <kbd>⌥ Space</kbd> does nothing | Another app may own the shortcut; pick another one (see Keys). |
 | "Voice is off: allow nodch…" | Click **Open Settings** next to it and allow nodch under Microphone. |
