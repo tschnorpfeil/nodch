@@ -37,10 +37,9 @@ enum DropReader {
         return DroppedFile(url: url, isDirectory: directory)
     }
 
-    /// A fresh folder per drop in ~/Library/Caches/nodch/Drops, so nothing collides.
+    /// A fresh folder per drop in ~/Library/Caches/nodch/Drops, so nothing collides. `PromiseDrops` deletes it again.
     private static func freshFolder() throws -> URL {
-        let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-        let url = caches.appendingPathComponent("nodch/Drops/\(UUID().uuidString)", isDirectory: true)
+        let url = PromiseDrops.root.appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         return url
     }

@@ -178,7 +178,11 @@ import Observation
     func toggleVoice() { perform(draft.toggleVoice()) }
     /// Return: sends once, after the microphone is off. On success the card closes; on failure the text stays with
     /// the error under it.
-    func submitPrompt() { perform(draft.submit()) }
+    func submitPrompt() {
+        guard IslandPresentation.acceptsTypedSubmit(answersQuestion: asking != nil, attachments: draft.attachments.count,
+                                                    shownFor: Date().timeIntervalSince(approvalShownAt)) else { return }
+        perform(draft.submit())
+    }
     func dropped(_ files: [DroppedFile]) { perform(draft.drop(files)) }
     func removeAttachment(_ id: Int) { draft.remove(id) }
 
@@ -229,11 +233,13 @@ import Observation
     }
 
     private func upload(_ id: Int, _ file: URL) {
-        guard let actions = store.actions else { draft.uploadFailed(id, reason: Self.notConnected); return }
+        guard let actions = store.actions else { draft.uploadFailed(id, reason: Self.notConnected); PromiseDrops.discard(file); return }
         Task {
             do { draft.uploaded(id, as: try await actions.upload(file: file)) } catch {
                 draft.uploadFailed(id, reason: Self.describe(error))
             }
+            // A copy nodch received from Mail or Photos is not needed once it is on Nod (or failed to get there).
+            PromiseDrops.discard(file)
         }
     }
 

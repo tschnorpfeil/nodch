@@ -27,6 +27,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        PromiseDrops.clearAll()
         let settings = ConnectionSettings(tokens: KeychainTokenStore())
         if demo {
             let script = DemoScript(store: store)

@@ -22,6 +22,14 @@ extension IslandChecks {
         check(kept.display == "Summarize my mail from today" && kept.attachments.count == 1,
               "keys: the hidden draft keeps its words and files for the next open")
 
+        // Return under a question that just appeared waits like a click; a new prompt or files are not answers.
+        check(!P.acceptsTypedSubmit(answersQuestion: true, attachments: 0, shownFor: 0.2)
+              && P.acceptsTypedSubmit(answersQuestion: true, attachments: 0, shownFor: P.answerGuard),
+              "keys: Return answers Nod's fresh question only after the guard")
+        check(P.acceptsTypedSubmit(answersQuestion: false, attachments: 0, shownFor: 0)
+              && P.acceptsTypedSubmit(answersQuestion: true, attachments: 1, shownFor: 0),
+              "keys: a new prompt, or files under a question, send at once")
+
         // The approval card: ⌥Return approves, ⌥⌫ declines, never plain Return; ⌘. stops a running turn.
         let approvalCard = P.CardOffers(approval: true)
         check(P.keyAction(.returnKey, .option, offers: approvalCard) == .approve, "keys: ⌥Return approves on the approval card")
