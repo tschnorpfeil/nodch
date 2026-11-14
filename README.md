@@ -5,7 +5,7 @@ questions and approve what it wants to do, without leaving the app you are in.
 
 **Unofficial.** nodch is an independent project and is not affiliated with or endorsed by n8n.
 
-<p align="center"><img src="docs/images/answer.png" width="620" alt="Nod's answer in the notch, with a follow-up field below it"></p>
+<p align="center"><img src="docs/images/tour.gif" width="620" alt="A tour of nodch in the notch: dictating a prompt, Nod working, its answer, a question with choices, and an approval for sending an email"></p>
 
 nodch lives in the MacBook notch, or at the top of the screen on displays without one, on the display you are
 working on. It does a few things and hands everything else to Nod:
@@ -38,7 +38,7 @@ to it.
    unzip it and move **Nodch** to Applications. The app is signed and notarized.
 2. Open it. If nodch can't reach Nod at `http://localhost:4310`, its Settings open: enter the address you open Nod at
    and, for the self-host stack, the token (`NOD_AUTH_TOKEN` in Nod's `.env`). **Test connection**, then **Save**.
-3. Press <kbd>⌥ Space</kbd>. The first time, macOS asks for the microphone and speech recognition.
+3. Press <kbd>⌥ Space</kbd>. The first time, macOS asks for the microphone.
 
 Right-click the island for **Settings…**, **Start at login** and **Quit nodch**.
 
@@ -83,7 +83,9 @@ too.
 | "doesn't accept this host name" (403) | Use the host from Nod's `NOD_PUBLIC_URL`, usually `localhost`, not `127.0.0.1`. |
 | "Nod rejected the token" (401) | Paste `NOD_AUTH_TOKEN` from Nod's `.env` into Settings. |
 | <kbd>⌥ Space</kbd> does nothing | Another app may own the shortcut; pick another one (see Keys). |
-| No microphone | System Settings › Privacy & Security › Microphone, allow nodch. |
+| "Voice is off: allow nodch…" | Click **Open Settings** next to it and allow nodch under Microphone. |
+| "Voice is off: no microphone found." | Connect a microphone, or pick one in System Settings › Sound › Input. |
+| "Nod isn’t connected" | Fix what the card says, then **Retry**. |
 
 To uninstall, quit nodch, turn off Start at login and delete the app. To remove its settings too:
 `defaults delete dev.nodch.Nodch`, and delete the "nodch: Nod token" item in Keychain Access.
@@ -113,7 +115,7 @@ Without a Nod at hand:
 swift run --package-path app Nodch --demo              # cycles through every state
 swift run --package-path app Nodch --snapshot <dir>    # renders every state to PNG
 swift run --package-path app Nodch --transcribe <file> # the prompt's speech-to-text on an audio file
-scripts/contract.sh                                    # a real Nod in Docker with a free stub model
+scripts/contract.sh                                    # a real Nod with a free stub model (Node 24, Docker)
 ```
 
 See [docs/contract.md](docs/contract.md) for the contract test, [CONTRIBUTING.md](CONTRIBUTING.md) before a pull
