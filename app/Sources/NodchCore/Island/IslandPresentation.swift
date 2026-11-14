@@ -76,6 +76,11 @@ public enum IslandPresentation {
         return true
     }
 
+    /// New work, an approval, a question or a failure takes over from an unread answer; a dropped connection does not.
+    public static func endsAnswerReady(_ state: IslandState) -> Bool {
+        [.working, .needsYou, .failed].contains(tone(state))
+    }
+
     /// What VoiceOver hears when the island changes by itself; nil when nothing new needs the person.
     public static func announcement(from old: IslandState, to new: IslandState, answerArrived: Bool) -> String? {
         if answerArrived { return "Nod’s answer is ready" }

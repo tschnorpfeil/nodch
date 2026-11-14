@@ -119,8 +119,9 @@ final class IslandController {
             model.answerReady = true
             model.keptAnswerID = model.store.answer?.id
             NSHapticFeedbackManager.defaultPerformer.perform(.levelChange, performanceTime: .now)
-        } else if model.answerReady, ![.rest, .done].contains(IslandPresentation.tone(new)) {
-            // New work, a question or an approval takes the island; the unread answer still opens with the prompt.
+        } else if model.answerReady, IslandPresentation.endsAnswerReady(new) {
+            // New work, a question, an approval or a failure takes the island; the unread answer still opens with the
+            // prompt. A dropped connection (offline) does not: once back, the island says "Answer ready" again.
             model.answerReady = false
         }
         if let text = IslandPresentation.announcement(from: old, to: new, answerArrived: arrived) {

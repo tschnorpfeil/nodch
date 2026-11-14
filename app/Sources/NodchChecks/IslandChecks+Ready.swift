@@ -21,6 +21,9 @@ extension IslandChecks {
         check(P.line(done, answerReady: true) == "Answer ready" && P.line(.rest, answerReady: true) == "Answer ready"
               && P.line(working, answerReady: true) != "Answer ready",
               "ready: the closed island says Answer ready, not a cut first line")
+        check(P.endsAnswerReady(working) && P.endsAnswerReady(.failed(message: "x"))
+              && !P.endsAnswerReady(.offline(reason: "Event stream disconnected.")) && !P.endsAnswerReady(.rest),
+              "ready: a dropped connection keeps the unread answer; new work ends it")
         check(P.shownAnswer(answer, state: .rest, now: now, kept: "m1") == answer && P.shownAnswer(answer, state: .rest, now: now) == nil,
               "ready: the kept answer shows however late the card opens")
         check(P.announcement(from: working, to: done, answerArrived: true) == "Nod’s answer is ready"
