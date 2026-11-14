@@ -3,6 +3,19 @@
 All notable changes to nodch are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## 0.1.1 — 2026-11-14
+
+### Fixed
+- Return under a question from Nod that just appeared waits out the same short guard as a click, so keys typed for
+  another app can't answer Nod.
+- Mails and photos dropped from Mail or Photos are deleted from nodch's caches once uploaded, and at launch.
+
+### Changed
+- Hint text is easier to read (above WCAG's 4.5:1 contrast).
+- When macOS denies the microphone, an Open Settings link takes you to the right privacy pane.
+- The offline card has Retry, which connects to Nod again right away.
+- README: an animated tour, corrected troubleshooting, and a social preview image.
+
 ## 0.1.0 — 2026-11-13
 
 ### Settings and keys
