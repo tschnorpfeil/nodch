@@ -194,7 +194,7 @@ struct IslandPromptCard: View {
                         // The same path as Return, so the mouse can send too.
                         Button { model.submitPrompt() } label: {
                             Image(systemName: "return").font(.system(size: 10, weight: .semibold))
-                                .foregroundStyle(IslandStyle.white(draft.canSend ? IslandStyle.secondary : IslandStyle.tertiary - 0.1))
+                                .foregroundStyle(IslandStyle.white(draft.canSend ? IslandStyle.secondary : IslandStyle.disabled))
                                 .frame(width: 18, height: IslandStyle.controlHeight)
                                 .contentShape(Rectangle())
                         }
@@ -243,9 +243,26 @@ struct IslandPromptCard: View {
         }
     }
 
+    static let microphoneSettings = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone")!
+
     @ViewBuilder private func voiceStatus(_ draft: PromptDraft) -> some View {
         if case .unavailable(let hint) = draft.voice {
-            footnote(hint.text, symbol: "mic.slash")
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                footnote(hint.text, symbol: "mic.slash")
+                if hint == .microphoneDenied {
+                    Button { NSWorkspace.shared.open(Self.microphoneSettings) } label: {
+                        HStack(spacing: 3) {
+                            Text("Open Settings")
+                            Image(systemName: "arrow.up.right").font(.system(size: 8, weight: .bold))
+                        }
+                        .font(IslandStyle.caption.weight(.semibold)).foregroundStyle(IslandStyle.accent)
+                        .fixedSize()
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Open Microphone privacy settings")
+                }
+            }
         } else if draft.voice.isActive || draft.voice == .finishing || draft.voiceReady {
             HStack(spacing: 7) {
                 if draft.voice == .listening {
@@ -651,6 +668,8 @@ struct IslandStatusCard: View {
                 Spacer(minLength: 0)
                 if model.tone == .offline {
                     Button("Settings…") { model.commands.openSettings() }.buttonStyle(IslandButtonStyle())
+                    Button("Retry") { model.commands.reconnect() }.buttonStyle(IslandButtonStyle())
+                        .accessibilityHint("Connects to Nod again")
                 }
                 IslandOpenButton(model: model, prominent: prominentOpen)
             }

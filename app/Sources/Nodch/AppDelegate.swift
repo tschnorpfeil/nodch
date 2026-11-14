@@ -44,6 +44,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let settingsWindow = SettingsWindowController(model: model)
         self.settingsWindow = settingsWindow
         commands.openSettings = { [weak settingsWindow] in settingsWindow?.show() }
+        commands.reconnect = { [weak self] in self?.connection?.connect() }
         installKeyMonitor()
 
         let controller = IslandController(store: store)
