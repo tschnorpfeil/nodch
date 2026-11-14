@@ -3,7 +3,7 @@
 All notable changes to nodch are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## Unreleased
+## 0.1.2 — 2026-11-14
 
 ### Fixed
 - An answer that arrives while the island is closed no longer shows as one cut-off line that fades after a few
