@@ -34,6 +34,8 @@ import SwiftUI
     private(set) var loginRevision = 0
     @ObservationIgnored let loginItem: LoginItem?
     @ObservationIgnored var openSettings: () -> Void
+    /// Connects to Nod again now, from the offline card's Retry: it only re-reads Nod's state, never resends anything.
+    @ObservationIgnored var reconnect: () -> Void = {}
 
     init(loginItem: LoginItem? = nil, openSettings: @escaping () -> Void = {}) {
         self.loginItem = loginItem

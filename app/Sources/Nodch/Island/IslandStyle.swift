@@ -8,7 +8,10 @@ import SwiftUI
 enum IslandStyle {
     static let primary = 0.95
     static let secondary = 0.62
-    static let tertiary = 0.4
+    /// Hints and captions: 0.5 on black reads at about 5.3:1, above WCAG's 4.5:1 for small text.
+    static let tertiary = 0.5
+    /// A control that is off now, e.g. Send with an empty field. Deliberately below `tertiary`.
+    static let disabled = 0.3
 
     static func white(_ opacity: Double) -> Color { Color.white.opacity(opacity) }
     static let accent = Color(red: 0x80 / 255, green: 0xB8 / 255, blue: 0xFF / 255)
