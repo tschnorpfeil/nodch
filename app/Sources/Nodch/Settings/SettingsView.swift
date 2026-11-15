@@ -101,7 +101,7 @@ struct SettingsView: View {
         case .done(.connected, _):
             status("Connected", symbol: "checkmark.circle.fill", color: .green)
         case .done(let check, let address):
-            status(check.message(address: address), symbol: "exclamationmark.triangle.fill", color: .red)
+            status(check.message(address: address, inSettings: true), symbol: "exclamationmark.triangle.fill", color: .red)
         case .invalid(let reason):
             status(reason, symbol: "exclamationmark.triangle.fill", color: .red)
         }

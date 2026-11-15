@@ -131,8 +131,8 @@ public enum TokenChange: Equatable, Sendable {
     nonisolated public static func opensSettingsAtLaunch(source: ConnectionSource, check: ConnectionCheck) -> Bool {
         guard source == .defaults else { return false }
         switch check {
-        case .unreachable, .unauthorized, .missingCredentials: return true
-        case .connected, .hostNotPermitted, .other: return false
+        case .unreachable, .unauthorized, .missingCredentials, .hostNotPermitted: return true
+        case .connected, .other: return false
         }
     }
 }

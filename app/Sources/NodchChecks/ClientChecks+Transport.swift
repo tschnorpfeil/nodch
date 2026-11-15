@@ -112,8 +112,11 @@ extension ClientChecks {
                 : .init(body: snapshot.withLock { $0 })
         }
         let observing = NodSession(client: client)
+        check(!observing.store.connecting, "connecting: false before the session starts")
         observing.start()
+        check(observing.store.connecting, "connecting: start() sets it")
         try await eventually { ClientStub.requests.contains { $0.url?.path == "/api/state" } && observing.store.state == .rest }
+        check(!observing.store.connecting, "connecting: the first state ends it")
         for type in ["activity", "working", "refresh"] {
             let before = ClientStub.requests.filter { $0.url?.path == "/api/state" }.count
             snapshot.withLock { $0 = fixture(approval: "pending") }
@@ -209,5 +212,16 @@ extension ClientChecks {
         try await first; try await second
         check(ClientStub.requests.count == 1, "concurrent state refreshes coalesce")
         session.disconnect()
+
+        // A fetch that fails ends "connecting" too: the card must not say it is still trying.
+        ClientStub.configure { _ in .init(error: URLError(.cannotConnectToHost)) }
+        let failing = NodSession(client: client)
+        failing.start()
+        check(failing.store.connecting, "connecting: true while the first fetch is out")
+        try await eventually { !failing.store.connecting }
+        if case .offline(let reason) = failing.store.state {
+            check(reason.contains("Nothing answers"), "connecting: a failing fetch ends it, and the state is offline")
+        } else { check(false, "connecting: a failing fetch ends it, and the state is offline") }
+        failing.disconnect()
     }
 }

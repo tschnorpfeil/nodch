@@ -21,12 +21,15 @@ enum IslandSnapshots {
         var guarded = false
         /// Nod answered while the card was closed; nobody opened it yet.
         var answerReady = false
+        /// A session is starting and has not heard from Nod yet.
+        var connecting = false
     }
 
     static let scenes: [Scene] = [
         Scene(name: "offline", state: IslandSamples.offline),
         Scene(name: "offline-hover", state: IslandSamples.offline, hovering: true),
         Scene(name: "offline-open", state: IslandSamples.offline, open: true),
+        Scene(name: "connecting-open", state: IslandSamples.connecting, open: true, connecting: true),
         Scene(name: "rest", state: .rest),
         Scene(name: "rest-hover", state: .rest, hovering: true),
         Scene(name: "working", state: IslandSamples.working()),
@@ -105,6 +108,7 @@ enum IslandSnapshots {
         window.contentView = canvas
 
         let store = IslandStore(state: scene.state, answer: scene.answer)
+        store.connecting = scene.connecting
         let model = IslandModel(store: store)
         model.picked = scene.picked
         model.hovering = scene.hovering
