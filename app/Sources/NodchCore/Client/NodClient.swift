@@ -15,7 +15,7 @@ public enum NodClientError: Error, LocalizedError, Equatable, Sendable {
         switch self {
         case .configuration(let reason): reason
         case .credentials: "nodch has no token or access key for Nod. Add the token in nodch Settings."
-        case .unauthorized: "Nod rejected the token. Check it in nodch Settings."
+        case .unauthorized: "Nod didn’t accept nodch’s sign-in. Check the token in nodch Settings."
         case .conflict(let reason): "This action is no longer available. Review Nod's current state. \(reason)"
         case .http(let status, let reason): "Nod returned HTTP \(status). \(reason)"
         case .network(let reason): "Cannot reach Nod. \(reason)"

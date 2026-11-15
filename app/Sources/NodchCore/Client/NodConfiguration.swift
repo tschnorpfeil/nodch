@@ -10,6 +10,8 @@ public struct NodConfiguration: Sendable {
     public static let defaultURL = URL(string: "http://127.0.0.1:4310")!
     public var baseURL: URL
     public var credential: Credential
+    /// A token or access key goes along with each request. Without one, a 401 means Nod asks for a token.
+    public var sendsCredential: Bool { if case .none = credential { false } else { true } }
 
     public init(baseURL: URL = Self.defaultURL, credential: Credential = .none) {
         self.baseURL = baseURL

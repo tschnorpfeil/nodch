@@ -5,6 +5,8 @@ public enum ConnectionCheck: Equatable, Sendable {
     case connected
     /// 401: Nod wants a token, or a different one.
     case unauthorized
+    /// 401 although nodch sent no token: Nod asks for one. Nothing was rejected.
+    case tokenRequired
     /// No token or access key could be read (an env-var setup whose access-key file is missing).
     case missingCredentials
     /// 403 "This host is not permitted": Nod only answers the host of its NOD_PUBLIC_URL.
@@ -13,9 +15,10 @@ public enum ConnectionCheck: Equatable, Sendable {
     case unreachable
     case other(String)
 
-    public init(error: Error) {
+    /// `sentCredential`: the request carried a token or access key, so a 401 rejects it.
+    public init(error: Error, sentCredential: Bool = true) {
         switch error as? NodClientError {
-        case .unauthorized: self = .unauthorized
+        case .unauthorized: self = sentCredential ? .unauthorized : .tokenRequired
         case .credentials: self = .missingCredentials
         case .network: self = .unreachable
         case .http(403, let reason) where reason.isEmpty || reason.lowercased().contains("host"): self = .hostNotPermitted
@@ -31,6 +34,7 @@ public enum ConnectionCheck: Equatable, Sendable {
         return switch self {
         case .connected: "Connected to Nod at \(shown)."
         case .unauthorized: inSettings ? "Nod rejected the token. Check the token above." : "Nod rejected the token. Check it in nodch Settings."
+        case .tokenRequired: "Nod asks for a token. \(inSettings ? "Enter it above" : "Add it in nodch Settings")."
         case .missingCredentials:
             "nodch has no token or access key for Nod at \(shown). Add the token \(inSettings ? "above" : "in nodch Settings")."
         case .hostNotPermitted:
@@ -59,7 +63,7 @@ public enum ConnectionCheck: Equatable, Sendable {
             _ = try await NodClient(configuration: configuration, session: session).state()
             return .connected
         } catch {
-            return ConnectionCheck(error: error)
+            return ConnectionCheck(error: error, sentCredential: configuration.sendsCredential)
         }
     }
 }

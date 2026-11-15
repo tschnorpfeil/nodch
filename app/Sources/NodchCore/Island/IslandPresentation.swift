@@ -198,6 +198,10 @@ public enum IslandPresentation {
 
     public static func takesKey(_ cause: OpenCause) -> Bool { cause != .approval }
 
+    /// The shortcut brings the prompt, except while Nod is not connected: then it brings the card that says why,
+    /// with Settings and Retry, and the microphone stays off.
+    public static func hotkeyOpensPrompt(_ tone: IslandTone) -> Bool { tone != .offline }
+
     /// A card the person opened closes on a click elsewhere. One that opened by itself for an approval stays until it
     /// is answered or collapsed: a click in another app is not a decision about it.
     public static func closesOnOutsideClick(_ cause: OpenCause) -> Bool { cause != .approval }
@@ -216,10 +220,12 @@ public enum IslandPresentation {
     }
 
     /// `open`: the card is open; `prompt`: it shows the prompt; `key`: it has the keyboard; `approvalCard`: it shows
-    /// an approval.
-    public static func hotkey(open: Bool, prompt: Bool, key: Bool, approvalCard: Bool) -> HotkeyAction {
+    /// an approval; `offline`: Nod is not connected.
+    public static func hotkey(open: Bool, prompt: Bool, key: Bool, approvalCard: Bool, offline: Bool = false) -> HotkeyAction {
         guard open else { return .open }
         if prompt { return key ? .hide : .prompt }
+        // Offline the card says why and offers Settings and Retry; a prompt could not be sent.
+        if offline { return key ? .hide : .takeKey }
         return approvalCard && !key ? .takeKey : .prompt
     }
 

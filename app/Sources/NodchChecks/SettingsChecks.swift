@@ -156,6 +156,13 @@ import NodchCore
         let rejected = await ConnectionCheck.run(nod, session: transport)
         check(rejected == .unauthorized && rejected.message(address: address) == "Nod rejected the token. Check it in nodch Settings.",
               "errors: 401 reads as a rejected token")
+        let asked = await ConnectionCheck.run(NodConfiguration(baseURL: address, credential: .none), session: transport)
+        check(asked == .tokenRequired && asked.message(address: address) == "Nod asks for a token. Add it in nodch Settings."
+              && asked.message(address: address, inSettings: true) == "Nod asks for a token. Enter it above."
+              && ConnectionSettings.opensSettingsAtLaunch(source: .defaults, check: .tokenRequired),
+              "errors: 401 without a token sent asks for one, rejects nothing, and opens Settings on first run")
+        ClientStub.configure { _ in .init(status: 401) }
+        _ = await ConnectionCheck.run(nod, session: transport)
         check(ClientStub.requests.count == 1 && ClientStub.requests.first?.url?.path == "/api/state"
               && ClientStub.requests.first?.httpMethod == "GET", "errors: Test connection sends one GET /api/state")
 
