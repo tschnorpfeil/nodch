@@ -293,6 +293,7 @@ final class IslandController {
         case .decline: model.answer(approved: false)
         case .stop: model.stop()
         case .sendPicks: model.sendPicks()
+        case .copyAnswer: model.copyAnswer()
         case .openNod:
             // The "Open Nod" button's path. Nod comes to the front, so the keyboard goes there, not back to the app
             // before; a draft stays for next time, neither sent nor discarded.

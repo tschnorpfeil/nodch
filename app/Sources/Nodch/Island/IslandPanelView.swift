@@ -294,7 +294,9 @@ struct IslandPromptCard: View {
         } else if let notice = draft.notice {
             footnote(notice, symbol: "info.circle")
         } else {
-            Text(IslandPresentation.promptHints(question: model.asking?.question, discards: draft.discardsOnEscape))
+            Text(model.answerCopied ? IslandPresentation.answerCopied
+                 : IslandPresentation.promptHints(question: model.asking?.question, discards: draft.discardsOnEscape,
+                                                  answer: model.shownAnswer != nil))
                 .font(IslandStyle.caption).foregroundStyle(IslandStyle.white(IslandStyle.tertiary))
                 .accessibilityHidden(true)
         }
@@ -345,6 +347,7 @@ struct IslandAnswer: View {
         VStack(alignment: .leading, spacing: 10) {
             IslandScrollingArea(maxHeight: max(80, min(300, model.layout.maxContent - 190))) {
                 IslandMarkdown(text: answer.text)
+                    .contextMenu { Button("Copy answer") { model.copyAnswer() } }
             }
             if let question = answer.question {
                 VStack(alignment: .leading, spacing: 6) {
