@@ -34,6 +34,10 @@ public struct NodSubmission: Decodable, Sendable {
 public enum NodEvent: Sendable {
     case connected
     case update(String)
+
+    /// The event types that make the session refetch state. `events()` yields only these (and `.connected`); streamed
+    /// `delta` tokens and heartbeats stay below the main actor. A feature that needs `delta` must add it here.
+    public static let refreshing: Set<String> = ["refresh", "working", "activity"]
 }
 
 /// HTTP mutations are deliberately sent once, without application-level retries.
@@ -169,12 +173,19 @@ public final class NodClient: Sendable {
                     }
                     continuation.yield(.connected)
                     var parser = SSEParser()
+                    let decoder = JSONDecoder()
+                    struct Payload: Decodable { let type: String }
+                    // Hand the parser one chunk per line: a blank line still delivers its event at once.
+                    var line: [UInt8] = []
                     for try await byte in bytes {
                         try Task.checkCancellation()
-                        for event in parser.append(Data([byte])) {
-                            struct Payload: Decodable { let type: String }
-                            let type = (try? JSONDecoder().decode(Payload.self, from: Data(event.data.utf8)))?.type ?? event.event
-                            continuation.yield(.update(type))
+                        line.append(byte)
+                        guard byte == 10 || byte == 13 else { continue }
+                        let chunk = Data(line)
+                        line.removeAll(keepingCapacity: true)
+                        for event in parser.append(chunk) {
+                            let type = (try? decoder.decode(Payload.self, from: Data(event.data.utf8)))?.type ?? event.event
+                            if NodEvent.refreshing.contains(type) { continuation.yield(.update(type)) }
                         }
                     }
                     continuation.finish()

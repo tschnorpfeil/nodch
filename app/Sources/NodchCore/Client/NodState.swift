@@ -123,32 +123,33 @@ public struct NodStateMapper: Sendable {
     public func answer(_ state: NodState) -> NodAnswer? {
         let busy = Set(state.turns.filter { $0.status == "running" || $0.status == "queued" }.map(\.id))
         let pendingIDs = Set(state.pendingAnswerChoiceMessageIds ?? [])
-        let latest = state.messages.enumerated()
-            .filter { _, message in
-                message.role == "assistant" && message.approval == nil
-                    && !message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                    && !(message.turnId.map(busy.contains) ?? false)
-            }
-            // Nod lists messages oldest first; createdAt decides, the list order breaks ties.
-            .max { lhs, rhs in
-                let left = lhs.element.createdAt.flatMap(Self.date) ?? .distantPast
-                let right = rhs.element.createdAt.flatMap(Self.date) ?? .distantPast
-                return left == right ? lhs.offset < rhs.offset : left < right
-            }?.element
-        guard let latest else { return nil }
+        let candidates = state.messages.enumerated().filter { _, message in
+            message.role == "assistant" && message.approval == nil
+                && !message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                && !(message.turnId.map(busy.contains) ?? false)
+        }
+        // Parse each date once, not per comparison.
+        let dated: [(offset: Int, element: NodState.Message, date: Date)] = candidates.map {
+            (offset: $0.offset, element: $0.element, date: $0.element.createdAt.flatMap(Self.date) ?? .distantPast)
+        }
+        // Nod lists messages oldest first; createdAt decides, the list order breaks ties.
+        let latestEntry = dated.max { lhs, rhs in lhs.date == rhs.date ? lhs.offset < rhs.offset : lhs.date < rhs.date }
+        guard let latestEntry else { return nil }
+        let latest = latestEntry.element
         var question: NodQuestion?
         if let choices = latest.answerChoices, let options = choices.options, !options.isEmpty,
            latest.answerChoicesPending == true || pendingIDs.contains(latest.id) {
             question = NodQuestion(choices: options.map { .init(id: $0.id, label: $0.label, detail: $0.description) },
                                    multiple: choices.multiple ?? false)
         }
-        return NodAnswer(id: latest.id, text: latest.text, at: latest.createdAt.flatMap(Self.date) ?? .distantPast,
+        return NodAnswer(id: latest.id, text: latest.text, at: latestEntry.date,
                          question: question)
     }
 
+    private static let fractionalDate = Date.ISO8601FormatStyle(includingFractionalSeconds: true)
+    private static let plainDate = Date.ISO8601FormatStyle()
+
     private static func date(_ text: String) -> Date? {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter.date(from: text) ?? ISO8601DateFormatter().date(from: text)
+        (try? fractionalDate.parse(text)) ?? (try? plainDate.parse(text))
     }
 }
