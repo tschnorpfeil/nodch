@@ -109,7 +109,8 @@ import Observation
         NSPasteboard.general.setString(answer.text, forType: .string)
         answerCopied = true
         NSAccessibility.post(element: NSApp as Any, notification: .announcementRequested,
-                             userInfo: [.announcement: IslandPresentation.answerCopied])
+                             userInfo: [.announcement: IslandPresentation.answerCopied,
+                                        .priority: NSAccessibilityPriorityLevel.high.rawValue])
         copiedTask?.cancel()
         copiedTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(1.5))
