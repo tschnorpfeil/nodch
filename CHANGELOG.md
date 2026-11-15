@@ -3,6 +3,15 @@
 All notable changes to nodch are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## Unreleased
+
+### Fixed
+- Return no longer sends a message without a file whose upload failed: it waits until you remove the red chip.
+- Files dropped while a message is going out say why they were ignored instead of vanishing.
+- The card says "Connecting to Nod…" while nodch connects, at launch and after Retry, and Retry keeps the last answer.
+- Connection errors shown in Settings point at the fields above, not back to Settings.
+- On first run, a Nod that refuses the host name opens Settings, like one that doesn't answer.
+
 ## 0.1.2 — 2026-11-14
 
 ### Fixed
