@@ -169,6 +169,7 @@ private final class SpinRingNSView: NSView {
     override init(frame: NSRect) {
         super.init(frame: frame)
         wantsLayer = true
+        clipsToBounds = false
         for layer in [track, arc] {
             layer.fillColor = nil
             layer.lineCap = .round
@@ -182,8 +183,8 @@ private final class SpinRingNSView: NSView {
 
     override func layout() {
         super.layout()
-        let inset = lineWidth / 2
-        let rect = bounds.insetBy(dx: inset, dy: inset)
+        // The stroke is centered on the full-size circle and overflows by half its width, as SwiftUI's stroke did.
+        let rect = bounds
         // A path from 12 o'clock, clockwise: strokeEnd 0.28 then covers 28 % of the circle.
         let path = CGMutablePath()
         path.addArc(center: CGPoint(x: rect.midX, y: rect.midY), radius: rect.width / 2,
