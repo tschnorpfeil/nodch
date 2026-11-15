@@ -29,7 +29,8 @@ import NodchCore
             // Retry keeps the last answer; another server's answer does not belong here.
             if previous != resolved.address { store.answer = nil }
             self.resolved = resolved
-            store.state = .offline(reason: "Connecting to \(ConnectionCheck.display(resolved.address))…")
+            // The card's title says "Connecting to Nod…" meanwhile; the reason under it is where.
+            store.state = .offline(reason: ConnectionCheck.display(resolved.address))
             let session = NodSession(client: NodClient(configuration: resolved.configuration), store: store)
             self.session = session
             session.start()
