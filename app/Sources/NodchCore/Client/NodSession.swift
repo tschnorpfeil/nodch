@@ -34,6 +34,7 @@ import Foundation
     /// Start once after constructing the session; disconnect when its owner stops observing.
     public func start() {
         guard connectionTask == nil else { return }
+        store.connecting = true
         let base = reconnectBase, cap = reconnectCap
         connectionTask = Task { [weak self, client] in
             var delay = base
@@ -136,6 +137,7 @@ import Foundation
     }
 
     private func apply(_ state: NodState) {
+        store.connecting = false
         store.state = mapper.map(state)
         store.answer = mapper.answer(state)
         if case .done = store.state {
@@ -151,6 +153,7 @@ import Foundation
     }
 
     private func show(_ error: Error) {
+        store.connecting = false
         doneTask?.cancel(); doneTask = nil
         // Plain words that name the address nodch tried, not environment variables.
         store.state = .offline(reason: ConnectionCheck(error: error).message(address: client.configuration.baseURL))

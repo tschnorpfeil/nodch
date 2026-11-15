@@ -43,7 +43,8 @@ public enum IslandPresentation {
     /// Return in the field. Words typed under Nod's question answer it (files go out as a new message), so while the
     /// question card has just (re)appeared Return waits out the same guard as a click on a choice: keys meant for
     /// another app must not answer Nod.
-    /// Only uploaded files count: a failed chip is not sent, so the words alone would answer.
+    /// Only uploaded files count here. A failed chip holds Return in the draft itself (`PromptDraft.submit`), so
+    /// nothing answers while one is there.
     public static func acceptsTypedSubmit(question: Bool, draft: PromptDraft, shownFor age: TimeInterval) -> Bool {
         !question || !draft.ready.isEmpty || acceptsAnswer(shownFor: age)
     }

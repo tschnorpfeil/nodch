@@ -595,7 +595,7 @@ struct IslandStatusCard: View {
         case .working:
             working
         case .offline:
-            message(title: "Nod isn’t connected", text: offlineReason, prominentOpen: true)
+            message(title: model.store.connecting ? "Connecting to Nod…" : "Nod isn’t connected", text: offlineReason, prominentOpen: true)
         case .failed:
             message(title: "Nod couldn’t finish", text: model.line, prominentOpen: true)
         case .rest, .done:

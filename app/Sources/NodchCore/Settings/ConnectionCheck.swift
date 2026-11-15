@@ -25,15 +25,17 @@ public enum ConnectionCheck: Equatable, Sendable {
     }
 
     /// Plain words for the person, naming the address that was tried. No environment variable names.
-    public func message(address: URL) -> String {
+    /// `inSettings`: shown in nodch Settings, where the fields are right above the message.
+    public func message(address: URL, inSettings: Bool = false) -> String {
         let shown = ConnectionCheck.display(address)
         return switch self {
         case .connected: "Connected to Nod at \(shown)."
-        case .unauthorized: "Nod rejected the token. Check it in nodch Settings."
-        case .missingCredentials: "nodch has no token or access key for Nod at \(shown). Add the token in nodch Settings."
+        case .unauthorized: inSettings ? "Nod rejected the token. Check the token above." : "Nod rejected the token. Check it in nodch Settings."
+        case .missingCredentials:
+            "nodch has no token or access key for Nod at \(shown). Add the token \(inSettings ? "above" : "in nodch Settings")."
         case .hostNotPermitted:
             "Nod at \(shown) doesn’t accept this host name. Use the host from Nod’s NOD_PUBLIC_URL, for example localhost."
-        case .unreachable: "Nothing answers at \(shown). Start Nod, or check the address in nodch Settings."
+        case .unreachable: "Nothing answers at \(shown). Start Nod, or check the address \(inSettings ? "above" : "in nodch Settings")."
         case .other(let reason): reason
         }
     }

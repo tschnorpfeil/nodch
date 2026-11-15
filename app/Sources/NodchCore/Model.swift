@@ -119,6 +119,8 @@ public enum IslandState: Equatable, Sendable {
     public var state: IslandState
     /// Nod's latest answer, set on every state fetch.
     public var answer: NodAnswer?
+    /// A session has started and no state or error has come back yet: the offline card says "Connecting".
+    public var connecting = false
     public weak var actions: NodActions?
 
     public init(state: IslandState = .offline(reason: "Not connected"), answer: NodAnswer? = nil) {

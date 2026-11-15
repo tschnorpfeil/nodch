@@ -152,8 +152,11 @@ extension IslandChecks {
         check(!files.canSend && files.submit().isEmpty && files.notice == PromptDraft.waitsForUploads, "drop: send blocked while uploading")
         files.uploadFailed(2, reason: "too large")
         check(files.attachments[1].status == .failed("too large") && files.notice == nil, "drop: a failed upload shows its reason")
-        check(files.canSend && files.submit() == [.send(prompt: "", attachments: [report])],
-              "drop: empty text + ready attachment allowed; failed chip not sent")
+        check(!files.canSend && files.failedFiles == 1 && files.submit().isEmpty && files.notice == PromptDraft.removeFailedFirst,
+              "drop: a ready file next to a failed one holds Return, with the notice")
+        files.remove(2)
+        check(files.notice == nil && files.canSend && files.submit() == [.send(prompt: "", attachments: [report])],
+              "drop: removing the failed chip clears the notice; empty text + ready attachment allowed")
         var removed = PromptDraft()
         _ = removed.drop([file("a.pdf")])
         removed.remove(1)
@@ -169,7 +172,33 @@ extension IslandChecks {
         _ = withText.drop([file("a.pdf"), file("b.pdf")])
         withText.uploaded(1, as: report)
         withText.uploadFailed(2, reason: "x")
-        check(withText.submit() == [.send(prompt: "Compare", attachments: [report])], "drop: text goes with the ready files only")
+        check(withText.submit().isEmpty && withText.display == "Compare" && withText.ready == [report]
+              && withText.notice == PromptDraft.removeFailedFirst, "drop: Return with text and a failed chip sends nothing; text and uploaded file stay")
+        withText.remove(2)
+        check(withText.submit() == [.send(prompt: "Compare", attachments: [report])], "drop: text goes with the ready files once the failed chip is removed")
+        var textOnly = PromptDraft(text: "Hi")
+        _ = textOnly.drop([file("a.pdf")])
+        textOnly.uploadFailed(1, reason: "x")
+        check(!textOnly.canSend && textOnly.submit().isEmpty && textOnly.notice == PromptDraft.removeFailedFirst, "drop: text with one failed chip holds Return")
+        textOnly.remove(1)
+        check(textOnly.submit() == [.send(prompt: "Hi", attachments: [])], "drop: after remove, Return sends the text")
+        // A failure that lands while dictation finishes holds the deferred send too.
+        var dictating = PromptDraft()
+        _ = dictating.open(.hotkey)
+        dictating.voiceStarted()
+        dictating.heard("hello", final: true)
+        let stopping = dictating.submit()
+        _ = dictating.drop([file("a.pdf")])
+        dictating.uploadFailed(1, reason: "x")
+        check(stopping == [.stopVoice(finalize: true)] && dictating.voiceFinished().isEmpty && !dictating.sending
+              && dictating.notice == PromptDraft.removeFailedFirst, "drop: the send after dictation waits for the failed chip")
+        // A drop during a send is refused out loud, and the line does not outlive the send.
+        var busy = PromptDraft(text: "Go")
+        _ = busy.submit()
+        check(busy.drop([file("late.pdf")]).isEmpty && busy.attachments.isEmpty && busy.notice == PromptDraft.waitsForSend,
+              "drop: a drop while sending adds no chip and says why")
+        busy.sendFailed("503")
+        check(busy.notice == nil && busy.error == "503", "drop: after a failed send only the error line stays")
         var nothing = PromptDraft()
         _ = nothing.drop([file("a.pdf")])
         nothing.uploadFailed(1, reason: "x")

@@ -105,12 +105,16 @@ public struct PromptDraft: Equatable, Sendable {
         attachments.compactMap { if case .ready(let file) = $0.status { file } else { nil } }
     }
     public var uploading: Bool { attachments.contains { $0.status == .uploading } }
+    /// Chips whose upload failed. Return waits until the person removes them: nodch never sends without a file silently.
+    public var failedFiles: Int {
+        attachments.filter { if case .failed = $0.status { true } else { false } }.count
+    }
     /// Escape would throw something away: the hints say "discard" then, "close" otherwise.
     public var discardsOnEscape: Bool { !display.isEmpty || !attachments.isEmpty }
     private var trimmed: String { display.trimmingCharacters(in: .whitespacesAndNewlines) }
     /// Return would send (or, while listening, stop the microphone and then send).
     public var canSend: Bool {
-        !sending && voice != .finishing && !uploading && (!trimmed.isEmpty || !ready.isEmpty)
+        !sending && voice != .finishing && !uploading && failedFiles == 0 && (!trimmed.isEmpty || !ready.isEmpty)
     }
 
     // MARK: Opening and closing
@@ -232,9 +236,11 @@ public struct PromptDraft: Equatable, Sendable {
     // MARK: Sending
 
     /// Return. While the microphone is on it goes off first and the prompt goes out once the last words are in
-    /// (`voiceFinished`). Never more than one send for one Return; nothing while an upload is still running.
+    /// (`voiceFinished`). Never more than one send for one Return; nothing while an upload is still running or a
+    /// file has failed.
     public mutating func submit() -> [PromptEffect] {
         guard !sending else { return [] }
+        if failedFiles > 0 { notice = Self.removeFailedFirst; return [] }
         if uploading { notice = Self.waitsForUploads; return [] }
         if voice == .finishing { sendAfterFinish = true; return [] }
         // Before the first words show, the microphone may already have heard some: finalize, then send what came.
@@ -262,6 +268,7 @@ public struct PromptDraft: Equatable, Sendable {
 
     private mutating func send() -> [PromptEffect] {
         let prompt = trimmed, files = ready
+        if failedFiles > 0 { notice = Self.removeFailedFirst; return [] }
         guard !uploading, !prompt.isEmpty || !files.isEmpty else { return [] }
         sending = true
         sendToken = nextID
@@ -293,6 +300,7 @@ public struct PromptDraft: Equatable, Sendable {
     public mutating func answeredKeepingText(token: Int) {
         guard sending, token == sendToken else { return }
         sending = false
+        if notice == Self.waitsForSend { notice = nil }
     }
 
     /// Nod took the message: the prompt starts empty next time. False when no send was out (it was discarded).
@@ -306,12 +314,16 @@ public struct PromptDraft: Equatable, Sendable {
     public mutating func sendFailed(_ message: String, token: Int? = nil) {
         guard sending, token ?? sendToken == sendToken else { return }
         sending = false
+        if notice == Self.waitsForSend { notice = nil }
         error = message
     }
 
     // MARK: Attachments
 
     public static let waitsForUploads = "Return sends once the files are uploaded."
+    public static let removeFailedFirst = "A file didn’t upload. Remove it with ×, then press Return."
+    /// A drop while a message is going out is ignored, and says so.
+    public static let waitsForSend = "Wait until the message is sent, then drop the files again."
     public static let folderRefused = "Folders can’t be attached. Drop the files inside instead."
     /// A drop that brought nothing: a promise the other app didn't keep, or files gone before nodch could read them.
     public static let nothingArrived = "Nothing arrived from that drop. Drag it onto nodch again."
@@ -333,7 +345,7 @@ public struct PromptDraft: Equatable, Sendable {
 
     /// Files dropped on the island: a chip for each one that is accepted, uploading at once.
     public mutating func drop(_ files: [DroppedFile]) -> [PromptEffect] {
-        guard !sending else { return [] }
+        guard !sending else { notice = Self.waitsForSend; return [] }
         let (accepted, notice) = Self.accept(files, existing: attachments.map(\.file))
         self.notice = notice
         error = nil
@@ -362,6 +374,7 @@ public struct PromptDraft: Equatable, Sendable {
         guard !sending else { return }
         attachments.removeAll { $0.id == id }
         if !uploading, notice == Self.waitsForUploads { notice = nil }
+        if failedFiles == 0, notice == Self.removeFailedFirst { notice = nil }
     }
 
     // MARK: Text

@@ -94,6 +94,9 @@ import NodchCore
         check(!ConnectionSettings.opensSettingsAtLaunch(source: .defaults, check: .connected), "first run: a Nod that answers needs no Settings")
         check(!ConnectionSettings.opensSettingsAtLaunch(source: .saved, check: .unreachable), "first run: saved settings never open Settings by themselves")
         check(!ConnectionSettings.opensSettingsAtLaunch(source: .environment, check: .unauthorized), "first run: env var setups never open Settings")
+        check(ConnectionSettings.opensSettingsAtLaunch(source: .defaults, check: .hostNotPermitted), "first run: a host name Nod refuses opens Settings")
+        check(!ConnectionSettings.opensSettingsAtLaunch(source: .saved, check: .hostNotPermitted), "first run: saved settings with a refused host stay shut")
+        check(!ConnectionSettings.opensSettingsAtLaunch(source: .defaults, check: .other("x")), "first run: an unknown error does not open Settings")
     }
 
     static func errorChecks() async throws {
@@ -132,6 +135,19 @@ import NodchCore
             + [ConnectionCheck.unauthorized, .missingCredentials, .unreachable, .hostNotPermitted].map { $0.message(address: address) }
         check(!descriptions.contains { $0.contains("NOD_AUTH_TOKEN") || $0.contains("NOD_DATA_ROOT") || $0.contains("NOD_URL") },
               "errors: what the person reads names no nodch env var")
+
+        // Inside Settings the fields are right above: no pointer to Settings. The island keeps its wording.
+        let inSettings = [ConnectionCheck.unauthorized, .missingCredentials, .unreachable].map { $0.message(address: address, inSettings: true) }
+        check(inSettings == ["Nod rejected the token. Check the token above.",
+                             "nodch has no token or access key for Nod at http://localhost:4310. Add the token above.",
+                             "Nothing answers at http://localhost:4310. Start Nod, or check the address above."],
+              "errors: inside Settings the messages point at the fields above")
+        check(!inSettings.contains { $0.contains("nodch Settings") }, "errors: inside Settings no message names nodch Settings")
+        check(ConnectionCheck.missingCredentials.message(address: address)
+              == "nodch has no token or access key for Nod at http://localhost:4310. Add the token in nodch Settings."
+              && ConnectionCheck.unreachable.message(address: address)
+              == "Nothing answers at http://localhost:4310. Start Nod, or check the address in nodch Settings.",
+              "errors: the island keeps the wording that names nodch Settings")
 
         // The live session's offline card names the address it tried.
         ClientStub.configure { _ in .init(error: URLError(.cannotConnectToHost)) }
