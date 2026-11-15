@@ -16,11 +16,13 @@ final class SettingsWindow: NSWindow {
 @MainActor final class SettingsWindowController {
     private let model: SettingsModel
     private var window: SettingsWindow?
+    private var observers: [NSObjectProtocol] = []
 
     init(model: SettingsModel) { self.model = model }
 
     func show() {
         model.commands.refreshLoginStatus()
+        model.refreshPrompt()
         let window = self.window ?? makeWindow()
         self.window = window
         if !window.isVisible { window.center() }
@@ -36,6 +38,12 @@ final class SettingsWindow: NSWindow {
         window.title = "nodch Settings"
         window.isReleasedWhenClosed = false
         window.collectionBehavior = [.moveToActiveSpace]
+        // Closing the window or leaving it mid-recording gives the shortcut back.
+        for name in [NSWindow.willCloseNotification, NSWindow.didResignKeyNotification] {
+            observers.append(NotificationCenter.default.addObserver(forName: name, object: window, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.model.cancelRecording() }
+            })
+        }
         return window
     }
 }

@@ -1,10 +1,12 @@
-import Foundation
+import AppKit
+import Carbon.HIToolbox
 import NodchCore
 import Observation
 import ServiceManagement
 
-/// The Settings window's state: the address and token being edited, the last test, and the login item. Nothing is
-/// stored until Save, and Test connection sends one GET /api/state with what is in the fields.
+/// The Settings window's state: the address and token being edited, the last test, the prompt's shortcut and
+/// dictation language, and the login item. The connection is stored only on Save, and Test connection sends one
+/// GET /api/state with what is in the fields; a shortcut or a language takes effect as soon as it is chosen.
 @MainActor @Observable final class SettingsModel {
     enum Test: Equatable {
         case idle
@@ -37,14 +39,48 @@ import ServiceManagement
     @ObservationIgnored var onSaved: () -> Void = {}
     @ObservationIgnored private var testRun = 0
 
+    /// The shortcut asked for and what became of it.
+    private(set) var hotkey = HotkeyStatus.on(.standard)
+    /// Why the shortcut does not work: at launch, or the one just chosen, which was then not kept.
+    private(set) var hotkeyMessage: String?
+    /// Waiting for the keys of a new shortcut; the current one is suspended meanwhile.
+    private(set) var recording = false
+    /// The keys just pressed cannot be a shortcut.
+    private(set) var recordingHint: String?
+    /// The dictation language; nil follows the system.
+    private(set) var speechChoice: String?
+    /// The languages the on-device model offers, grouped as in the microphone's menu.
+    var speechLanguages: (yours: [String], others: [String]) = ([], [])
+
+    @ObservationIgnored let defaults: SettingsDefaults
+    /// The shortcut in effect.
+    @ObservationIgnored var currentHotkey: () -> HotkeyStatus = { .on(.standard) }
+    /// Registers a shortcut and saves it to the defaults given when it works; returns what became of it. The app
+    /// passes `HotkeyCenter`; without it every shortcut is accepted.
+    @ObservationIgnored var chooseHotkey: (HotkeySpec.Setting, SettingsDefaults) -> HotkeyStatus = { setting, defaults in
+        PromptSettings.chooseHotkey(setting, previous: setting, defaults: defaults) { tried in
+            if case .on(let spec) = tried { .on(spec) } else { .off }
+        }.chosen
+    }
+    @ObservationIgnored var suspendHotkey: () -> Void = {}
+    @ObservationIgnored var resumeHotkey: () -> Void = {}
+    /// The shortcut in effect changed: the island's hint follows.
+    @ObservationIgnored var onHotkeyChanged: (HotkeyStatus) -> Void = { _ in }
+    /// The dictation language changed: the microphone follows.
+    @ObservationIgnored var onSpeechLanguage: (String?) -> Void = { _ in }
+    @ObservationIgnored var supportedLanguages: () async -> [String] = { await SpeechSupport.supported() }
+    @ObservationIgnored private var keyMonitor: Any?
+
     init(settings: ConnectionSettings, commands: AppCommands, environment: [String: String] = ProcessInfo.processInfo.environment) {
         self.settings = settings
         self.commands = commands
+        defaults = settings.defaults
         self.environment = ConnectionSettings.environmentInEffect(environment)
         environmentAddress = self.environment.isEmpty ? nil : (try? NodConfiguration.fromEnvironment(environment))?.baseURL
         // With the environment in charge the field shows the address in effect, read-only.
         server = (environmentAddress ?? settings.savedServer).map(ConnectionCheck.display) ?? ""
         storedToken = currentAddress.map { settings.token(for: $0) != nil } ?? false
+        speechChoice = PromptSettings.speechLanguage(defaults)
     }
 
     var usesEnvironment: Bool { !environment.isEmpty }
@@ -136,6 +172,78 @@ import ServiceManagement
         } catch {
             saved = IslandModel.describe(error)
         }
+    }
+
+    // MARK: Prompt
+
+    /// When the window shows: the shortcut in effect (and why it does not work), and the language the microphone's
+    /// menu may have changed meanwhile.
+    func refreshPrompt() {
+        hotkey = currentHotkey()
+        hotkeyMessage = hotkey.message
+        speechChoice = PromptSettings.speechLanguage(defaults)
+        guard speechLanguages.yours.isEmpty, speechLanguages.others.isEmpty else { return }
+        Task { speechLanguages = SpeechLanguage.menu(supported: await supportedLanguages(), system: Locale.preferredLanguages) }
+    }
+
+    static let recordingRule = "Use a letter, digit, Space, Return or Tab with at least one of ⌃ ⌥ ⇧ ⌘."
+
+    /// The next key down with a modifier becomes the shortcut; Escape cancels. Keys reach only Settings meanwhile.
+    func startRecording() {
+        guard !recording else { return }
+        recording = true
+        recordingHint = nil
+        suspendHotkey()
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            let code = UInt32(event.keyCode), modifiers = Self.carbonModifiers(event.modifierFlags)
+            MainActor.assumeIsolated { self?.pressed(keyCode: code, modifiers: modifiers) }
+            return nil
+        }
+    }
+
+    /// Also when the window closes or loses the keyboard mid-recording: the previous shortcut comes back.
+    func cancelRecording() {
+        guard recording else { return }
+        if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
+        keyMonitor = nil
+        recording = false
+        recordingHint = nil
+        resumeHotkey()
+    }
+
+    func pressed(keyCode: UInt32, modifiers: UInt32) {
+        if keyCode == UInt32(kVK_Escape) && modifiers == 0 { cancelRecording(); return }
+        guard let spec = HotkeySpec.from(keyCode: keyCode, modifiers: modifiers) else {
+            recordingHint = Self.recordingRule
+            return
+        }
+        choose(.on(spec))
+    }
+
+    /// A recorded shortcut, Reset or Turn off. A taken shortcut is not kept, and the message says why.
+    func choose(_ setting: HotkeySpec.Setting) {
+        cancelRecording()
+        let chosen = chooseHotkey(setting, defaults)
+        hotkey = currentHotkey()
+        hotkeyMessage = chosen.message
+        onHotkeyChanged(hotkey)
+    }
+
+    /// Automatic (nil) removes the saved choice; the microphone's menu reads the same default.
+    func chooseSpeechLanguage(_ id: String?) {
+        guard id != speechChoice else { return }
+        speechChoice = id
+        PromptSettings.setSpeechLanguage(id, defaults: defaults)
+        onSpeechLanguage(id)
+    }
+
+    nonisolated static func carbonModifiers(_ flags: NSEvent.ModifierFlags) -> UInt32 {
+        var modifiers: UInt32 = 0
+        if flags.contains(.control) { modifiers |= UInt32(controlKey) }
+        if flags.contains(.option) { modifiers |= UInt32(optionKey) }
+        if flags.contains(.shift) { modifiers |= UInt32(shiftKey) }
+        if flags.contains(.command) { modifiers |= UInt32(cmdKey) }
+        return modifiers
     }
 
     // MARK: Start at login

@@ -16,7 +16,17 @@ public struct HotkeySpec: Equatable, Sendable {
     public static let defaultsKey = "nodch.hotkey"
     public static let standard = HotkeySpec(keyCode: UInt32(kVK_Space), modifiers: UInt32(optionKey), key: "Space")
 
-    public enum Setting: Equatable, Sendable { case off, on(HotkeySpec) }
+    public enum Setting: Equatable, Sendable {
+        case off, on(HotkeySpec)
+
+        /// The text saved in `nodch.hotkey`: "off" or `HotkeySpec.stored`.
+        public var stored: String {
+            switch self {
+            case .off: "off"
+            case .on(let spec): spec.stored
+            }
+        }
+    }
 
     /// The setting for a saved value: missing means the default; nil means the value cannot be read.
     public static func setting(_ text: String?) -> Setting? {
@@ -40,6 +50,23 @@ public struct HotkeySpec: Equatable, Sendable {
         return HotkeySpec(keyCode: code, modifiers: mods, key: name)
     }
 
+    /// A key pressed with these Carbon modifiers, as a shortcut; nil for a key nodch does not know or without a modifier.
+    public static func from(keyCode: UInt32, modifiers: UInt32) -> HotkeySpec? {
+        let mods = modifiers & modifierMask
+        guard mods != 0, let (_, name) = keys.values.first(where: { $0.0 == keyCode }) else { return nil }
+        return HotkeySpec(keyCode: keyCode, modifiers: mods, key: name)
+    }
+
+    /// The text saved in `nodch.hotkey`: "ctrl+option+n", modifiers in the order control, option, shift, cmd.
+    public var stored: String {
+        var tokens: [String] = []
+        if modifiers & UInt32(controlKey) != 0 { tokens.append("ctrl") }
+        if modifiers & UInt32(optionKey) != 0 { tokens.append("option") }
+        if modifiers & UInt32(shiftKey) != 0 { tokens.append("shift") }
+        if modifiers & UInt32(cmdKey) != 0 { tokens.append("cmd") }
+        return (tokens + [key.lowercased()]).joined(separator: "+")
+    }
+
     /// "⌥ Space", "⌃⌥ N".
     public var display: String {
         var text = ""
@@ -49,6 +76,8 @@ public struct HotkeySpec: Equatable, Sendable {
         if modifiers & UInt32(cmdKey) != 0 { text += "⌘" }
         return text + " " + key
     }
+
+    private static let modifierMask = UInt32(cmdKey | optionKey | controlKey | shiftKey)
 
     private static let modifierNames: [String: UInt32] = [
         "cmd": UInt32(cmdKey), "command": UInt32(cmdKey),
@@ -73,4 +102,34 @@ public struct HotkeySpec: Equatable, Sendable {
         for (name, code) in letters { keys[name] = (UInt32(code), name.uppercased()) }
         return keys
     }()
+}
+
+/// What became of a shortcut: in effect, off, or refused because macOS or another app already uses it.
+public enum HotkeyStatus: Equatable, Sendable {
+    case on(HotkeySpec)
+    case off
+    case takenBySystem(HotkeySpec)
+    case takenByApp(HotkeySpec)
+
+    /// The shortcut that works now; nil when it is off or taken.
+    public var inEffect: HotkeySpec? {
+        if case .on(let spec) = self { spec } else { nil }
+    }
+
+    /// The shortcut asked for, whether or not it works; nil when it is off.
+    public var spec: HotkeySpec? {
+        switch self {
+        case .on(let spec), .takenBySystem(let spec), .takenByApp(let spec): spec
+        case .off: nil
+        }
+    }
+
+    /// Why the shortcut does not work, in plain words; nil when nothing is wrong.
+    public var message: String? {
+        switch self {
+        case .on, .off: nil
+        case .takenBySystem(let spec): "\(spec.display) is used by macOS. Choose another shortcut."
+        case .takenByApp(let spec): "\(spec.display) is used by another app. Choose another shortcut."
+        }
+    }
 }

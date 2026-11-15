@@ -11,20 +11,54 @@ final class HotkeyCenter {
     private var handler: EventHandlerRef?
     var onPress: (@MainActor () -> Void)?
 
-    /// Registers the shortcut from `nodch.hotkey`. Returns what is in effect, nil when it is off or taken.
-    @discardableResult func apply(_ defaults: UserDefaults = .standard) -> HotkeySpec? {
+    /// The shortcut asked for: from `nodch.hotkey` at launch, then the last one chosen that worked.
+    private(set) var setting = HotkeySpec.Setting.on(.standard)
+    /// What became of `setting`.
+    private(set) var status = HotkeyStatus.on(.standard)
+    /// While Settings records a new shortcut, the current one is unregistered so the keys reach the recorder.
+    private(set) var suspended = false
+
+    /// Registers the shortcut from `nodch.hotkey` and returns what became of it.
+    @discardableResult func apply(_ defaults: SettingsDefaults = UserDefaults.standard) -> HotkeyStatus {
         let saved = defaults.string(forKey: HotkeySpec.defaultsKey)
-        let setting = HotkeySpec.setting(saved) ?? {
+        setting = HotkeySpec.setting(saved) ?? {
             print("nodch: \(HotkeySpec.defaultsKey) = \"\(saved ?? "")\" is not a shortcut; using \(HotkeySpec.standard.display)")
             return .on(HotkeySpec.standard)
         }()
-        guard case .on(let spec) = setting else { register(nil); return nil }
-        guard !Self.takenBySystem(spec) else {
-            print("nodch: \(spec.display) is a macOS shortcut; choose another one with `defaults write` \(HotkeySpec.defaultsKey)")
-            register(nil)
-            return nil
-        }
-        return register(spec) ? spec : nil
+        suspended = false
+        status = attempt(setting)
+        if let message = status.message { print("nodch: \(message)") }
+        return status
+    }
+
+    /// From Settings: registers `setting` and saves it when that works. When it is taken nothing is saved and the
+    /// previous shortcut comes back. Returns what became of the choice.
+    func choose(_ setting: HotkeySpec.Setting, defaults: SettingsDefaults = UserDefaults.standard) -> HotkeyStatus {
+        suspended = false
+        let result = PromptSettings.chooseHotkey(setting, previous: self.setting, defaults: defaults, register: attempt)
+        if result.chosen.message == nil { self.setting = setting }
+        status = result.inEffect
+        return result.chosen
+    }
+
+    /// Unregisters the shortcut until `resume`, so pressing it while recording does not open the prompt.
+    func suspend() {
+        guard !suspended else { return }
+        suspended = true
+        register(nil)
+    }
+
+    /// Registers the shortcut again after `suspend`.
+    func resume() {
+        guard suspended else { return }
+        suspended = false
+        status = attempt(setting)
+    }
+
+    private func attempt(_ setting: HotkeySpec.Setting) -> HotkeyStatus {
+        guard case .on(let spec) = setting else { register(nil); return .off }
+        guard !Self.takenBySystem(spec) else { register(nil); return .takenBySystem(spec) }
+        return register(spec) ? .on(spec) : .takenByApp(spec)
     }
 
     /// Enabled macOS shortcuts (e.g. switch input source) silently win; hence check beforehand.
@@ -59,10 +93,7 @@ final class HotkeyCenter {
         var newRef: EventHotKeyRef?
         let status = RegisterEventHotKey(spec.keyCode, spec.modifiers, EventHotKeyID(signature: OSType(0x4E44_4348), id: 1), // "NDCH"
                                          GetApplicationEventTarget(), 0, &newRef)
-        guard status == noErr, let newRef else {
-            print("nodch: \(spec.display) is taken by another app (\(status))")
-            return false
-        }
+        guard status == noErr, let newRef else { return false }
         ref = newRef
         return true
     }

@@ -28,6 +28,10 @@ enum SettingsSnapshots {
         var tokenEntry = ""
         var test = SettingsModel.Test.idle
         var login = SMAppService.Status.notRegistered
+        /// What became of the shortcut, without the real hot key.
+        var hotkey = HotkeyStatus.on(.standard)
+        /// The dictation languages, without the real speech model.
+        var languages: (yours: [String], others: [String]) = (["en-US", "en-GB"], ["de-DE", "fr-FR"])
     }
 
     static let scenes: [Scene] = [
@@ -38,6 +42,8 @@ enum SettingsSnapshots {
               login: .requiresApproval),
         Scene(name: "settings-test-failed", server: "http://127.0.0.1:4310", tokenEntry: "snapshot-token",
               test: .done(.hostNotPermitted, address: URL(string: "http://127.0.0.1:4310")!)),
+        Scene(name: "settings-shortcut-taken", server: "http://localhost:4310", storedToken: true, login: .enabled,
+              hotkey: .takenByApp(.standard)),
     ]
 
     /// Returns how many PNGs it wrote, out of `scenes.count * 2`.
@@ -66,6 +72,10 @@ enum SettingsSnapshots {
         model.server = scene.server
         model.tokenEntry = scene.tokenEntry
         model.test = scene.test
+        model.speechLanguages = scene.languages
+        model.supportedLanguages = { [] }
+        model.currentHotkey = { scene.hotkey }
+        model.refreshPrompt()
 
         let controller = NSHostingController(rootView: SettingsView(model: model).background(Color(nsColor: .windowBackgroundColor)))
         let window = NSWindow(contentRect: NSRect(x: -4000, y: -4000, width: 460, height: 400), styleMask: [.borderless],

@@ -24,6 +24,7 @@ import NodchCore
             try precedenceChecks(defaults: FakeDefaults())
             normalizeChecks()
             firstRunChecks()
+            promptChecks()
             try await errorChecks()
         } catch { check(false, "settings checks: \(error)") }
     }
@@ -76,6 +77,50 @@ import NodchCore
         if case .none = removed.configuration.credential {
             check(tokens.items.isEmpty && removed.source == .saved, "settings: Remove deletes the token and keeps the address")
         } else { check(false, "settings: Remove deletes the token") }
+    }
+
+    /// The prompt's shortcut and dictation language. A fake stands in for the hot key: it refuses the shortcuts in
+    /// `taken` and records every registration.
+    static func promptChecks() {
+        let defaults = FakeDefaults()
+        let other = HotkeySpec.parse("ctrl+option+n")!
+        var registered: [HotkeySpec.Setting] = []
+        let register: (Set<String>) -> (HotkeySpec.Setting) -> HotkeyStatus = { taken in
+            { setting in
+                registered.append(setting)
+                guard case .on(let spec) = setting else { return .off }
+                return taken.contains(spec.stored) ? .takenByApp(spec) : .on(spec)
+            }
+        }
+
+        let chosen = PromptSettings.chooseHotkey(.on(other), previous: .on(.standard), defaults: defaults, register: register([]))
+        check(chosen.chosen == .on(other) && chosen.inEffect == .on(other)
+              && defaults.string(forKey: HotkeySpec.defaultsKey) == "ctrl+option+n"
+              && HotkeySpec.setting(defaults.string(forKey: HotkeySpec.defaultsKey)) == .on(other),
+              "prompt settings: a chosen shortcut is saved as ctrl+option+n")
+
+        registered = []
+        let cmdK = HotkeySpec.parse("cmd+shift+k")!
+        let refused = PromptSettings.chooseHotkey(.on(cmdK), previous: .on(other), defaults: defaults, register: register([cmdK.stored]))
+        check(refused.chosen == .takenByApp(cmdK) && refused.chosen.message == "⇧⌘ K is used by another app. Choose another shortcut."
+              && defaults.string(forKey: HotkeySpec.defaultsKey) == "ctrl+option+n",
+              "prompt settings: a taken shortcut leaves the saved value unchanged and says why")
+        check(refused.inEffect == .on(other) && registered == [.on(cmdK), .on(other)],
+              "prompt settings: after a taken shortcut the previous one is registered again")
+
+        let off = PromptSettings.chooseHotkey(.off, previous: .on(other), defaults: defaults, register: register([]))
+        check(off.chosen == .off && off.inEffect == .off && defaults.string(forKey: HotkeySpec.defaultsKey) == "off"
+              && HotkeySpec.setting(defaults.string(forKey: HotkeySpec.defaultsKey)) == .off,
+              "prompt settings: Turn off saves off")
+
+        check(PromptSettings.speechLanguage(defaults) == nil, "prompt settings: no saved language follows the system")
+        PromptSettings.setSpeechLanguage("de-DE", defaults: defaults)
+        check(defaults.string(forKey: SpeechLanguage.defaultsKey) == "de-DE" && PromptSettings.speechLanguage(defaults) == "de-DE",
+              "prompt settings: a dictation language is saved as its BCP 47 id")
+        PromptSettings.setSpeechLanguage(nil, defaults: defaults)
+        check(defaults.values[SpeechLanguage.defaultsKey] == nil && PromptSettings.speechLanguage(defaults) == nil,
+              "prompt settings: Automatic removes the saved dictation language")
+        // UserDefaults removes a key set to nil, which the fake mirrors; a real suite would leave a plist behind.
     }
 
     static func normalizeChecks() {
