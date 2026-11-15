@@ -5,6 +5,10 @@ All notable changes to nodch are documented here. The format follows
 
 ## Unreleased
 
+### Changed
+- nodch uses about a third of the CPU while Nod works: the spinner turns without redrawing the island 60 times a
+  second, and streamed answer tokens no longer wake the app.
+
 ### Fixed
 - Return no longer sends a message without a file whose upload failed: it waits until you remove the red chip.
 - Files dropped while a message is going out say why they were ignored instead of vanishing.
