@@ -13,6 +13,9 @@ import Observation
     var doneExpired = false
     /// Nod answered while the card was closed and nobody opened it since: the island says "Answer ready" until then.
     var answerReady = false
+    /// The answer was just copied: the key line says so for a moment.
+    var answerCopied = false
+    @ObservationIgnored private var copiedTask: Task<Void, Never>?
     /// That answer's id: the card shows it when opened, however late (`IslandPresentation.shownAnswer`).
     var keptAnswerID: String?
     var isOpen = false
@@ -99,12 +102,29 @@ import Observation
     /// The card shows the prompt (with an answer or Nod's question above it), not a status card.
     var showsPromptCard: Bool { showsPrompt || tone == .rest || tone == .done || asking != nil }
     var showsApprovalCard: Bool { !showsPromptCard && approval != nil }
+    /// ⇧⌘C or "Copy answer": the answer on show goes to the pasteboard as Nod wrote it (Markdown).
+    func copyAnswer() {
+        guard let answer = shownAnswer else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(answer.text, forType: .string)
+        answerCopied = true
+        NSAccessibility.post(element: NSApp as Any, notification: .announcementRequested,
+                             userInfo: [.announcement: IslandPresentation.answerCopied,
+                                        .priority: NSAccessibilityPriorityLevel.high.rawValue])
+        copiedTask?.cancel()
+        copiedTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(1.5))
+            if !Task.isCancelled { self?.answerCopied = false }
+        }
+    }
+
     /// What the open card offers to the keyboard (`IslandPresentation.keyAction`).
     var cardOffers: IslandPresentation.CardOffers {
         guard isOpen else { return .init() }
         guard showsPromptCard else { return .init(approval: approval != nil, stop: tone == .working) }
         let field = draft.display.trimmingCharacters(in: .whitespacesAndNewlines)
-        return .init(picks: asking?.question?.multiple == true && !picked.isEmpty && field.isEmpty && !draft.sending)
+        return .init(picks: asking?.question?.multiple == true && !picked.isEmpty && field.isEmpty && !draft.sending,
+                     answer: shownAnswer != nil)
     }
     var approval: (PendingApproval, more: Int)? {
         if case .needsYou(let approval, let more) = store.state { (approval, more) } else { nil }

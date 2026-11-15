@@ -154,9 +154,10 @@ public enum IslandPresentation {
 
     /// The quiet key line under the prompt. `discards`: Escape would throw away words or files. ⌘↩ is named here,
     /// not in the Open Nod button beside the field: a wider button would narrow the field and wrap its placeholder.
-    public static func promptHints(question: NodQuestion?, discards: Bool) -> String {
+    /// `answer`: an answer shows above the field; its copy key is named when no question's keys need the room.
+    public static func promptHints(question: NodQuestion?, discards: Bool, answer: Bool = false) -> String {
         let tail = "  ·  " + (discards ? "esc discard" : "esc close") + "  ·  ⌘↩ open Nod"
-        guard let question, !question.choices.isEmpty else { return "↩ send" + tail }
+        guard let question, !question.choices.isEmpty else { return "↩ send" + tail + (answer ? "  ·  ⇧⌘C copy" : "") }
         return (question.multiple ? "↑↓ navigate  ·  ↩ select  ·  ⌥↩ send" : "↑↓ navigate  ·  ↩ answer") + tail
     }
 
@@ -223,8 +224,8 @@ public enum IslandPresentation {
     }
 
     /// A key the open card answers to while a modifier is held. Plain keys stay with the field and the choice list.
-    public enum CardKey: Equatable, Sendable { case returnKey, delete, period }
-    public enum KeyModifier: Equatable, Sendable { case none, command, option }
+    public enum CardKey: Equatable, Sendable { case returnKey, delete, period, c }
+    public enum KeyModifier: Equatable, Sendable { case none, command, option, commandShift }
 
     /// What the card on screen offers to the keyboard.
     public struct CardOffers: Equatable, Sendable {
@@ -234,16 +235,19 @@ public enum IslandPresentation {
         public var stop: Bool
         /// Ticked choices on a multiple-choice question, and an empty field: they can go out as they are.
         public var picks: Bool
+        /// Nod's answer shows above the prompt: it can be copied whole.
+        public var answer: Bool
 
-        public init(approval: Bool = false, stop: Bool = false, picks: Bool = false) {
-            self.approval = approval; self.stop = stop; self.picks = picks
+        public init(approval: Bool = false, stop: Bool = false, picks: Bool = false, answer: Bool = false) {
+            self.approval = approval; self.stop = stop; self.picks = picks; self.answer = answer
         }
     }
 
-    public enum KeyAction: Equatable, Sendable { case approve, decline, stop, sendPicks, openNod }
+    public enum KeyAction: Equatable, Sendable { case approve, decline, stop, sendPicks, openNod, copyAnswer }
 
     /// ⌘Return does what "Open Nod" does, on every card. ⌥Return approves and ⌥⌫ declines on the approval card; ⌥Return sends ticked choices (like their Send button);
-    /// ⌘. stops a running turn. Plain Return never approves and keeps ticking choices.
+    /// ⌘. stops a running turn; ⇧⌘C copies the answer on show (⌘C stays with the selection). Plain Return never
+    /// approves and keeps ticking choices.
     /// The app asks only while the island has the keyboard, and Approve and Decline still wait out `answerGuard`.
     public static func keyAction(_ key: CardKey, _ modifier: KeyModifier, offers: CardOffers) -> KeyAction? {
         switch (key, modifier) {
@@ -251,9 +255,13 @@ public enum IslandPresentation {
         case (.returnKey, .option): offers.approval ? .approve : offers.picks ? .sendPicks : nil
         case (.delete, .option): offers.approval ? .decline : nil
         case (.period, .command): offers.stop ? .stop : nil
+        case (.c, .commandShift): offers.answer ? .copyAnswer : nil
         default: nil
         }
     }
+
+    /// Under the prompt for a moment after ⇧⌘C or "Copy answer", and what VoiceOver hears.
+    public static let answerCopied = "Answer copied"
 
     /// The approval card's quiet key line.
     public static let approvalHints = "⌥↩ approve  ·  ⌥⌫ decline  ·  esc close"

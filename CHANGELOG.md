@@ -9,6 +9,7 @@ All notable changes to nodch are documented here. The format follows
 - Settings has a Prompt section: click the shortcut and press a new one, reset it or turn it off. It applies at once,
   and Settings says when macOS or another app already uses a shortcut instead of failing silently.
 - The dictation language can be picked in Settings, as well as from the microphone's menu.
+- ⇧⌘C, or a right-click on the answer, copies Nod's whole answer.
 
 ### Changed
 - nodch uses about a third of the CPU while Nod works: the spinner turns without redrawing the island 60 times a

@@ -483,12 +483,13 @@ final class IslandPresenter: NSObject {
         })
     }
 
-    /// Return, Delete or "." with ⌘ or ⌥ alone; nil for anything else.
+    /// Return, Delete or "." with ⌘ or ⌥ alone, or C with ⇧⌘; nil for anything else.
     nonisolated private static func cardKey(_ event: NSEvent) -> (IslandPresentation.CardKey, IslandPresentation.KeyModifier)? {
         let modifier: IslandPresentation.KeyModifier
         switch event.modifierFlags.intersection([.command, .control, .option, .shift]) {
         case [.command]: modifier = .command
         case [.option]: modifier = .option
+        case [.command, .shift]: return event.charactersIgnoringModifiers?.lowercased() == "c" ? (.c, .commandShift) : nil
         default: return nil
         }
         switch event.keyCode {

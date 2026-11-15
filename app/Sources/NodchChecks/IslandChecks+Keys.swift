@@ -51,6 +51,12 @@ extension IslandChecks {
               "keys: ⌥Return and ⌥⌫ belong to the field when no approval card shows")
         check(P.keyAction(.period, .command, offers: .init(stop: true)) == .stop && P.keyAction(.period, .command, offers: .init()) == nil,
               "keys: ⌘. stops only where a Stop button shows")
+        check(P.keyAction(.c, .commandShift, offers: .init(answer: true)) == .copyAnswer
+              && P.keyAction(.c, .commandShift, offers: .init()) == nil && P.keyAction(.c, .command, offers: .init(answer: true)) == nil,
+              "keys: ⇧⌘C copies the answer only where one shows; ⌘C stays with the selection")
+        check(P.promptHints(question: nil, discards: false, answer: true) == "↩ send  ·  esc close  ·  ⌘↩ open Nod  ·  ⇧⌘C copy"
+              && !P.promptHints(question: NodQuestion(choices: [.init(id: "a", label: "A")], multiple: false), discards: false, answer: true).contains("copy"),
+              "keys: the copy key is named under an answer, not under a question's keys")
         check(P.hotkey(open: true, prompt: false, key: false, approvalCard: true) == .takeKey,
               "keys: the shortcut gives an approval card that opened by itself the keyboard")
         check(P.hotkey(open: true, prompt: false, key: true, approvalCard: true) == .prompt,

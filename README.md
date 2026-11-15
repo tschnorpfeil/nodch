@@ -53,6 +53,7 @@ Right-click the island for **Settings…**, **Start at login** and **Quit nodch*
 | <kbd>⌥ Return</kbd> | approval / question | Approve, or send the ticked choices |
 | <kbd>⌥ ⌫</kbd> | approval | Decline |
 | <kbd>⌘ .</kbd> | while Nod works | Stop |
+| <kbd>⇧ ⌘ C</kbd> | under an answer | Copy the whole answer (or right-click it) |
 | <kbd>⌘ Return</kbd> | any card | Open the Nod app |
 | <kbd>⌘ ,</kbd> / <kbd>⌘ Q</kbd> | any card | Settings / Quit |
 
