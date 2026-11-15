@@ -156,7 +156,8 @@ import Foundation
         store.connecting = false
         doneTask?.cancel(); doneTask = nil
         // Plain words that name the address nodch tried, not environment variables.
-        store.state = .offline(reason: ConnectionCheck(error: error).message(address: client.configuration.baseURL))
+        store.state = .offline(reason: ConnectionCheck(error: error, sentCredential: client.configuration.sendsCredential)
+            .message(address: client.configuration.baseURL))
     }
 
     // Every mutation remembers the generation it started in. One that comes back after `disconnect` (Settings saved

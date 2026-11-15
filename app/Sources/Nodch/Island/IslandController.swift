@@ -238,6 +238,8 @@ final class IslandController {
         }
         guard presenter.placement != nil else { return }
         switch cause {
+        case .hotkey where !IslandPresentation.hotkeyOpensPrompt(model.tone):
+            model.showsPrompt = false
         case .hotkey, .drop:
             model.showsPrompt = true
             model.perform(model.draft.open(cause == .hotkey ? .hotkey : .drop))
@@ -267,7 +269,7 @@ final class IslandController {
 
     private func hotkeyPressed() {
         let action = IslandPresentation.hotkey(open: model.isOpen, prompt: model.showsPrompt, key: presenter.panel.isKeyWindow,
-                                               approvalCard: model.showsApprovalCard)
+                                               approvalCard: model.showsApprovalCard, offline: model.tone == .offline)
         // Closing turns the microphone off (`PromptDraft.closed`) and keeps the draft.
         if action == .hide { closePrompt(); return }
         // The approval card keeps showing; its keys work now. The click guard keeps running from when it appeared.

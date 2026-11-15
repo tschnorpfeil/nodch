@@ -83,7 +83,8 @@ too.
 |---|---|
 | "Nothing answers at …" | Start Nod, or fix the address in Settings. |
 | "doesn’t accept this host name" (403) | Use the host from Nod's `NOD_PUBLIC_URL`, usually `localhost`, not `127.0.0.1`. |
-| "Nod rejected the token" (401) | Paste `NOD_AUTH_TOKEN` from Nod's `.env` into Settings. |
+| "Nod asks for a token" (401) | Paste `NOD_AUTH_TOKEN` from Nod's `.env` into Settings and **Save**. It is kept in your Keychain, so it is there however nodch is started. A token set only as an environment variable (a LaunchAgent, a terminal) is missing when you open nodch from Finder. |
+| "Nod rejected the token" (401) | The saved token is not the one Nod has now. Paste the current `NOD_AUTH_TOKEN` into Settings. |
 | <kbd>⌥ Space</kbd> does nothing | macOS or another app owns the shortcut. Settings says so; choose another one there. |
 | "Voice is off: allow nodch…" | Click **Open Settings** next to it and allow nodch under Microphone. |
 | "Voice is off: no microphone found." | Connect a microphone, or pick one in System Settings › Sound › Input. |

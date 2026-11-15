@@ -11,6 +11,11 @@ extension IslandChecks {
         check(P.hotkey(open: false, prompt: true, key: false, approvalCard: false) == .open
               && P.hotkey(open: true, prompt: true, key: false, approvalCard: false) == .prompt
               && P.hotkey(open: true, prompt: false, key: true, approvalCard: false) == .prompt, "keys: otherwise the shortcut brings the prompt")
+        check(P.hotkey(open: true, prompt: false, key: true, approvalCard: false, offline: true) == .hide
+              && P.hotkey(open: true, prompt: false, key: false, approvalCard: false, offline: true) == .takeKey
+              && P.hotkey(open: true, prompt: true, key: true, approvalCard: false, offline: true) == .hide
+              && !P.hotkeyOpensPrompt(.offline) && P.hotkeyOpensPrompt(.rest) && P.hotkeyOpensPrompt(.working),
+              "keys: offline the shortcut brings the card that says why, not a prompt that cannot be sent")
         var kept = PromptDraft()
         _ = kept.open(.hotkey)
         kept.voiceStarted()

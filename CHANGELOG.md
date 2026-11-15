@@ -16,6 +16,9 @@ All notable changes to nodch are documented here. The format follows
   second, and streamed answer tokens no longer wake the app.
 
 ### Fixed
+- Without a token, nodch says "Nod asks for a token" instead of claiming one was rejected.
+- While Nod isn't connected, the shortcut opens the card that says why, with Settings and Retry, instead of a prompt
+  that cannot be sent; the microphone stays off.
 - Return no longer sends a message without a file whose upload failed: it waits until you remove the red chip.
 - Files dropped while a message is going out say why they were ignored instead of vanishing.
 - The card says "Connecting to Nod…" while nodch connects, at launch and after Retry, and Retry keeps the last answer.
