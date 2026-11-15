@@ -2,7 +2,7 @@ import NodchCore
 import ServiceManagement
 import SwiftUI
 
-/// nodch Settings: which Nod to talk to, Start at login, and what nodch is.
+/// nodch Settings: which Nod to talk to, the prompt's shortcut and dictation language, Start at login, and what nodch is.
 struct SettingsView: View {
     @Bindable var model: SettingsModel
 
@@ -11,6 +11,7 @@ struct SettingsView: View {
             Form {
                 if model.usesEnvironment { environmentSection }
                 connectionSection
+                promptSection
                 Section {
                     loginRow
                 }
@@ -65,6 +66,74 @@ struct SettingsView: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .disabled(model.usesEnvironment)
+    }
+
+    private var promptSection: some View {
+        Section {
+            shortcutRow
+            if let hint = model.recordingHint {
+                Text(hint).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            } else if let message = model.hotkeyMessage, !model.recording {
+                status(message, symbol: "exclamationmark.triangle.fill", color: .orange)
+            }
+            languageRow
+        } header: {
+            Text("Prompt")
+        }
+    }
+
+    private var shortcutText: String {
+        if model.recording { return "Press a shortcut…" }
+        return model.hotkey.spec?.display ?? "Off"
+    }
+
+    private var shortcutRow: some View {
+        LabeledContent("Shortcut") {
+            HStack(spacing: 6) {
+                Button {
+                    if model.recording { model.cancelRecording() } else { model.startRecording() }
+                } label: {
+                    Text(shortcutText)
+                        .foregroundStyle(model.recording || model.hotkey.spec == nil ? .secondary : .primary)
+                        .frame(minWidth: 120)
+                }
+                .accessibilityLabel("Shortcut")
+                .accessibilityValue(shortcutText)
+                .accessibilityHint(model.recording ? "Press the new shortcut, or Escape to cancel" : "Click, then press a new shortcut")
+                Menu {
+                    Button("Reset to \(HotkeySpec.standard.display)") { model.choose(.on(.standard)) }
+                        .disabled(model.hotkey == .on(.standard))
+                    Button("Turn off") { model.choose(.off) }
+                        .disabled(model.hotkey == .off)
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .accessibilityLabel("Shortcut options")
+            }
+        }
+    }
+
+    private var languageRow: some View {
+        let menu = model.speechLanguages
+        let listed = menu.yours + menu.others
+        return Picker("Dictation language", selection: Binding(get: { model.speechChoice }, set: { model.chooseSpeechLanguage($0) })) {
+            Text(menu.yours.first.map { "Automatic (\(SpeechLanguage.name($0)))" } ?? "Automatic").tag(String?.none)
+            if let choice = model.speechChoice, !listed.contains(choice) {
+                Text(SpeechLanguage.name(choice)).tag(Optional(choice))
+            }
+            if !menu.yours.isEmpty {
+                Divider()
+                ForEach(menu.yours, id: \.self) { Text(SpeechLanguage.name($0)).tag(Optional($0)) }
+            }
+            if !menu.others.isEmpty {
+                Section("Other Languages") {
+                    ForEach(menu.others, id: \.self) { Text(SpeechLanguage.name($0)).tag(Optional($0)) }
+                }
+            }
+        }
     }
 
     @ViewBuilder private var tokenRow: some View {

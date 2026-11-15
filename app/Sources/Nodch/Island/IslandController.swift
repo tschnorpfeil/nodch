@@ -88,10 +88,13 @@ final class IslandController {
             MainActor.assumeIsolated { self?.followDrag(type) }
         }
         HotkeyCenter.shared.onPress = { [weak self] in self?.hotkeyPressed() }
-        model.hotkey = HotkeyCenter.shared.apply()?.display
+        showHotkey(HotkeyCenter.shared.apply())
         observe()
         stateChanged()
     }
+
+    /// The hint in the wing and the prompt names the shortcut in effect; none when it is off or taken.
+    func showHotkey(_ status: HotkeyStatus) { model.hotkey = status.inEffect?.display }
 
     private func observe() {
         withObservationTracking { _ = model.store.state } onChange: { [weak self] in

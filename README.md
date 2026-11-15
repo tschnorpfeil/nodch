@@ -57,14 +57,15 @@ Right-click the island for **Settings…**, **Start at login** and **Quit nodch*
 | <kbd>⌘ ,</kbd> / <kbd>⌘ Q</kbd> | any card | Settings / Quit |
 
 Plain <kbd>Return</kbd> never approves. A card that appears by itself ignores clicks and keys for a moment, so a
-click meant for another app doesn't decide anything. To change the prompt's shortcut:
-`defaults write dev.nodch.Nodch nodch.hotkey "ctrl+option+n"` (or `off`), then restart nodch.
+click meant for another app doesn't decide anything. To change the prompt's shortcut or turn it off, open Settings
+(<kbd>⌘ ,</kbd>), click the shortcut and press the new one. It applies at once.
 
 ## Dictation
 
 Speech becomes text on your Mac with Apple's on-device speech model, which macOS downloads once, for free. No audio
 leaves the Mac. nodch listens in the first of your system languages (System Settings › General › Language & Region)
-that the model supports, and falls back to US English. Right-click the microphone to pick another language. The
+that the model supports, and falls back to US English. Pick another language in Settings, or right-click the
+microphone. The
 microphone is on only while the prompt listens; it stops by itself after a pause, and the first key you type stops it
 too.
 
@@ -82,7 +83,7 @@ too.
 | "Nothing answers at …" | Start Nod, or fix the address in Settings. |
 | "doesn’t accept this host name" (403) | Use the host from Nod's `NOD_PUBLIC_URL`, usually `localhost`, not `127.0.0.1`. |
 | "Nod rejected the token" (401) | Paste `NOD_AUTH_TOKEN` from Nod's `.env` into Settings. |
-| <kbd>⌥ Space</kbd> does nothing | Another app may own the shortcut; pick another one (see Keys). |
+| <kbd>⌥ Space</kbd> does nothing | macOS or another app owns the shortcut. Settings says so; choose another one there. |
 | "Voice is off: allow nodch…" | Click **Open Settings** next to it and allow nodch under Microphone. |
 | "Voice is off: no microphone found." | Connect a microphone, or pick one in System Settings › Sound › Input. |
 | "Nod isn’t connected" | Fix what the card says, then **Retry**. |
