@@ -47,6 +47,13 @@ extension ClientChecks {
             let answered = mapper.answer(try .decode(answerFixture(pending: false))), unflagged = mapper.answer(try .decode(answerFixture(pending: nil)))
             check(answered?.id == questionID && answered?.question == nil && unflagged?.question == nil, "an answered question has no question")
             check(mapper.answer(try .decode(answerFixture(pending: nil, listed: true)))?.question?.choices.count == 2, "pendingAnswerChoiceMessageIds alone marks the question open")
+            // The newest message's date parses with and without fractional seconds (2026-11-13T09:41:00Z = 1794562860).
+            let newest = "2026-11-13T09:41:00"
+            let fixtureText = String(decoding: answerFixture(), as: UTF8.self).replacingOccurrences(of: "2026-11-13T08:02:00.000Z", with: newest)
+            for (suffix, expected) in [("Z", 1794562860.0), (".123Z", 1794562860.123)] {
+                let dated = mapper.answer(try .decode(Data(fixtureText.replacingOccurrences(of: newest, with: newest + suffix).utf8)))
+                check(dated?.id == questionID && abs((dated?.at.timeIntervalSince1970 ?? 0) - expected) < 0.01, "answer date parses \(newest + suffix)")
+            }
             check(mapper.answer(try .decode(fixture(status: "running"))) == nil, "no answer while the only one belongs to a running turn")
             var done = NodStateMapper()
             _ = done.map(try .decode(fixture(status: "running")))

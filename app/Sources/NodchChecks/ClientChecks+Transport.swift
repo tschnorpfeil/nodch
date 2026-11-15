@@ -205,7 +205,43 @@ extension ClientChecks {
         for try await event in events {
             switch event { case .connected: types.append("connected"); case .update(let type): types.append(type) }
         }
-        check(types == ["connected", "delta", "activity", "working", "refresh"], "SSE reads Nod JSON event types rather than relying on event field")
+        check(types == ["connected", "activity", "working", "refresh"], "SSE reads Nod JSON event types rather than relying on event field, and drops delta")
+
+        // Deltas and comment heartbeats never leave events(); refreshing events still do.
+        ClientStub.configure { request in
+            request.url?.path == "/api/events"
+                ? .init(mime: "text/event-stream", body: Data(": heartbeat\n\ndata: {\"type\":\"delta\",\"text\":\"a\"}\n\ndata: {\"type\":\"refresh\"}\n\n: ping\r\n\r\ndata: {\"type\":\"delta\"}\r\n\r\ndata: {\"type\":\"activity\"}\r\n\r\n".utf8))
+                : .init(body: idle)
+        }
+        var filtered: [String] = []
+        for try await event in client.events() {
+            switch event { case .connected: filtered.append("connected"); case .update(let type): filtered.append(type) }
+        }
+        check(filtered == ["connected", "refresh", "activity"], "SSE yields only refreshing events: delta and heartbeats are dropped")
+
+        // An event split across two network chunks still arrives once its blank line has.
+        ClientStub.configure { request in
+            request.url?.path == "/api/events"
+                ? .init(mime: "text/event-stream", finish: false)
+                : .init(body: idle)
+        }
+        let splitStream = client.events()
+        let splitTypes = Mutex<[String]>([])
+        let reader = Task {
+            for try await event in splitStream {
+                switch event { case .connected: splitTypes.withLock { $0.append("connected") }; case .update(let type): splitTypes.withLock { $0.append(type) } }
+            }
+        }
+        try await eventually { splitTypes.withLock { $0 } == ["connected"] }
+        ClientStub.emit("data: {\"ty")
+        try await Task.sleep(for: .milliseconds(30))
+        check(splitTypes.withLock { $0 } == ["connected"], "a half-received SSE event is not yielded early")
+        ClientStub.emit("pe\":\"refresh\"}\n")
+        ClientStub.emit("\n")
+        try await eventually { splitTypes.withLock { $0 } == ["connected", "refresh"] }
+        check(true, "an SSE event split across network chunks still arrives")
+        reader.cancel()
+        _ = await reader.result
         ClientStub.configure { _ in .init(body: idle) }
         async let first: Void = session.refresh()
         async let second: Void = session.refresh()

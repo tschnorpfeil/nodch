@@ -46,7 +46,7 @@ import Foundation
                         switch event {
                         case .connected: self?.requestRefresh()
                         case .update(let type):
-                            if ["refresh", "working", "activity"].contains(type) { self?.requestRefresh() }
+                            if NodEvent.refreshing.contains(type) { self?.requestRefresh() }
                         }
                     }
                     if !Task.isCancelled { self?.show(NodClientError.network("Event stream disconnected.")) }

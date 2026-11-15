@@ -128,7 +128,7 @@ struct IslandGlyph: View {
     }
 }
 
-/// A turning arc; under Reduce Motion a still one.
+/// A turning arc, turned by the render server; under Reduce Motion a still one.
 struct SpinRing: View {
     var size: CGFloat
     var lineWidth: CGFloat
@@ -136,17 +136,99 @@ struct SpinRing: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 60, paused: reduceMotion)) { context in
-            let turn = reduceMotion ? 0 : context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 0.9) / 0.9
-            ZStack {
-                Circle().stroke(color.opacity(0.22), lineWidth: lineWidth)
-                Circle().trim(from: 0, to: 0.28)
-                    .stroke(color, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
-                    .rotationEffect(.degrees(turn * 360 - 90))
-            }
+        SpinRingLayer(lineWidth: lineWidth, color: NSColor(color), still: reduceMotion)
+            .frame(width: size, height: size)
+            .accessibilityHidden(true)
+    }
+}
+
+private struct SpinRingLayer: NSViewRepresentable {
+    var lineWidth: CGFloat
+    var color: NSColor
+    var still: Bool
+
+    func makeNSView(context: Context) -> SpinRingNSView { SpinRingNSView() }
+
+    func updateNSView(_ view: SpinRingNSView, context: Context) {
+        view.lineWidth = lineWidth
+        view.color = color
+        view.still = still
+    }
+}
+
+/// A track and an arc as shape layers; the arc turns by a repeating Core Animation rotation (0.9 s, linear).
+private final class SpinRingNSView: NSView {
+    private let track = CAShapeLayer()
+    private let arc = CAShapeLayer()
+    private static let key = "spin"
+
+    var lineWidth: CGFloat = 1.5 { didSet { if lineWidth != oldValue { needsLayout = true } } }
+    var color: NSColor = .white { didSet { applyColor() } }
+    var still = false { didSet { if still != oldValue { updateSpin() } } }
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        wantsLayer = true
+        clipsToBounds = false
+        for layer in [track, arc] {
+            layer.fillColor = nil
+            layer.lineCap = .round
+            self.layer?.addSublayer(layer)
         }
-        .frame(width: size, height: size)
-        .accessibilityHidden(true)
+        arc.strokeStart = 0
+        arc.strokeEnd = 0.28
+    }
+
+    @available(*, unavailable) required init?(coder: NSCoder) { nil }
+
+    override func layout() {
+        super.layout()
+        // The stroke is centered on the full-size circle and overflows by half its width, as SwiftUI's stroke did.
+        let rect = bounds
+        // A path from 12 o'clock, clockwise: strokeEnd 0.28 then covers 28 % of the circle.
+        let path = CGMutablePath()
+        path.addArc(center: CGPoint(x: rect.midX, y: rect.midY), radius: rect.width / 2,
+                    startAngle: .pi / 2, endAngle: .pi / 2 - 2 * .pi, clockwise: true)
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        for layer in [track, arc] {
+            layer.frame = bounds
+            layer.path = path
+            layer.lineWidth = lineWidth
+        }
+        arc.removeAnimation(forKey: Self.key)
+        CATransaction.commit()
+        applyColor()
+        updateSpin()
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        arc.removeAnimation(forKey: Self.key)
+        updateSpin()
+    }
+
+    private func applyColor() {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        track.strokeColor = color.withAlphaComponent(0.22 * color.alphaComponent).cgColor
+        arc.strokeColor = color.cgColor
+        CATransaction.commit()
+    }
+
+    private func updateSpin() {
+        if still || window == nil {
+            arc.removeAnimation(forKey: Self.key)
+        } else if arc.animation(forKey: Self.key) == nil {
+            let spin = CABasicAnimation(keyPath: "transform.rotation.z")
+            spin.fromValue = 0
+            spin.toValue = -2 * Double.pi   // clockwise on screen, whatever the layer's flip
+            spin.duration = 0.9
+            spin.repeatCount = .infinity
+            spin.timingFunction = CAMediaTimingFunction(name: .linear)
+            spin.isRemovedOnCompletion = false
+            arc.add(spin, forKey: Self.key)
+        }
     }
 }
 
