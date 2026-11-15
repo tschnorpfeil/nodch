@@ -90,9 +90,10 @@ final class HotkeyCenter {
                 return noErr
             }, 1, &type, nil, &handler)
         }
+        // Exclusive: a shortcut another app owns that way is refused here instead of registering and never firing.
         var newRef: EventHotKeyRef?
         let status = RegisterEventHotKey(spec.keyCode, spec.modifiers, EventHotKeyID(signature: OSType(0x4E44_4348), id: 1), // "NDCH"
-                                         GetApplicationEventTarget(), 0, &newRef)
+                                         GetApplicationEventTarget(), OptionBits(kEventHotKeyExclusive), &newRef)
         guard status == noErr, let newRef else { return false }
         ref = newRef
         return true

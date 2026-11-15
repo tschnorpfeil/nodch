@@ -209,6 +209,10 @@ import ServiceManagement
         recording = false
         recordingHint = nil
         resumeHotkey()
+        // Registering again can turn out differently than before the recording: show what is in effect now.
+        hotkey = currentHotkey()
+        hotkeyMessage = hotkey.message
+        onHotkeyChanged(hotkey)
     }
 
     func pressed(keyCode: UInt32, modifiers: UInt32) {
