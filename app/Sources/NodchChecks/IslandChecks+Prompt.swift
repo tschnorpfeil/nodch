@@ -187,10 +187,11 @@ extension IslandChecks {
         _ = dictating.open(.hotkey)
         dictating.voiceStarted()
         dictating.heard("hello", final: true)
+        let stopping = dictating.submit()
         _ = dictating.drop([file("a.pdf")])
-        _ = dictating.submit()
         dictating.uploadFailed(1, reason: "x")
-        check(dictating.voiceFinished().isEmpty && !dictating.sending, "drop: the send after dictation waits for the failed chip")
+        check(stopping == [.stopVoice(finalize: true)] && dictating.voiceFinished().isEmpty && !dictating.sending
+              && dictating.notice == PromptDraft.removeFailedFirst, "drop: the send after dictation waits for the failed chip")
         // A drop during a send is refused out loud, and the line does not outlive the send.
         var busy = PromptDraft(text: "Go")
         _ = busy.submit()
