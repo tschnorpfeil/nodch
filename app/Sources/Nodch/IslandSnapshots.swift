@@ -56,6 +56,7 @@ enum IslandSnapshots {
         Scene(name: "prompt", state: .rest, open: true, prompt: PromptDraft()),
         Scene(name: "prompt-text", state: .rest, open: true, prompt: PromptDraft(text: "Summarise my unread mail from today")),
         Scene(name: "prompt-error", state: IslandSamples.working(), open: true, prompt: IslandSamples.failedSend),
+        Scene(name: "prompt-approval-waiting", state: .needsYou(IslandSamples.email, more: 0), open: true, prompt: PromptDraft()),
         Scene(name: "prompt-preparing", state: .rest, open: true, prompt: IslandSamples.voiceStarting),
         Scene(name: "prompt-transcribing", state: .rest, open: true, prompt: IslandSamples.voiceFinishing),
         Scene(name: "prompt-ready", state: .rest, open: true, prompt: IslandSamples.voiceReady),

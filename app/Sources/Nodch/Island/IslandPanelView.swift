@@ -170,7 +170,22 @@ struct IslandPromptCard: View {
             if let answer = model.shownAnswer {
                 IslandAnswer(model: model, answer: answer)
             }
-            if model.tone != .rest, model.tone != .done, model.asking == nil {
+            if model.tone == .needsYou, model.approval != nil {
+                // The approval waits while the person types: one click shows its card, the draft stays. The card's
+                // buttons wait out the guard again from now.
+                Button {
+                    model.showsPrompt = false
+                    model.startAnswerGuard()
+                } label: {
+                    Text("\(statusLine) — Show").lineLimit(1).truncationMode(.tail)
+                        .font(IslandStyle.small.weight(.semibold)).foregroundStyle(IslandStyle.accent)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .contentTransition(.identity).transaction { $0.animation = nil }
+                .accessibilityLabel(statusLine)
+                .accessibilityHint("Shows the approval")
+            } else if model.tone != .rest, model.tone != .done, model.asking == nil {
                 Text(statusLine).lineLimit(1).truncationMode(.tail)
                 .font(IslandStyle.small).foregroundStyle(IslandStyle.white(IslandStyle.secondary))
                 // A new line replaces the old one at once: under the card's fade the two showed on top of each other.
