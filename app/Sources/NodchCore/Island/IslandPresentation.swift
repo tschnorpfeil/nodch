@@ -153,6 +153,16 @@ public enum IslandPresentation {
         }
     }
 
+    /// The open working card's title and the live line under it. The header already says "Working" with a spinner, so
+    /// without Nod's own title the live line becomes the title and nothing repeats; with a title the line under it is
+    /// the step, or what Nod is doing, never the title again. The site has its own row.
+    public static func workingCard(_ activity: WorkActivity) -> (title: String, step: String?) {
+        let doing = switch activity.doing { case .queued: "Queued…"; case .model: "Thinking…"; case .tool: "Working…" }
+        let step = nonEmpty(activity.step)
+        guard let title = nonEmpty(activity.title) else { return (step ?? doing, nil) }
+        return (title, step ?? doing)
+    }
+
     /// The answer the prompt shows above its field: an open question always, otherwise a recent answer.
     /// `kept`: the id of an answer that arrived while the card was closed; it shows however late it is opened.
     public static func shownAnswer(_ answer: NodAnswer?, state: IslandState, now: Date = Date(), kept: String? = nil) -> NodAnswer? {
