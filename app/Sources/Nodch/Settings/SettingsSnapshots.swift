@@ -25,6 +25,8 @@ enum SettingsSnapshots {
         var environment: [String: String] = [:]
         var server = ""
         var storedToken = false
+        /// The address is saved too, as after Save.
+        var saved = false
         var tokenEntry = ""
         var test = SettingsModel.Test.idle
         var login = SMAppService.Status.notRegistered
@@ -40,6 +42,8 @@ enum SettingsSnapshots {
               test: .done(.connected, address: ConnectionSettings.defaultURL), login: .enabled),
         Scene(name: "settings-environment", environment: ["NOD_URL": "http://localhost:4310", "NOD_AUTH_TOKEN": "snapshot"],
               login: .requiresApproval),
+        Scene(name: "settings-environment-kept", environment: ["NOD_URL": "http://localhost:4310", "NOD_AUTH_TOKEN": "snapshot"],
+              server: "http://localhost:4310", storedToken: true, saved: true),
         Scene(name: "settings-test-failed", server: "http://127.0.0.1:4310", tokenEntry: "snapshot-token",
               test: .done(.hostNotPermitted, address: URL(string: "http://127.0.0.1:4310")!)),
         Scene(name: "settings-shortcut-taken", server: "http://localhost:4310", storedToken: true, login: .enabled,
@@ -65,7 +69,9 @@ enum SettingsSnapshots {
         if scene.storedToken, let address = try? ConnectionSettings.normalize(scene.server) {
             tokens.items[ConnectionSettings.origin(address)] = "snapshot"
         }
-        let settings = ConnectionSettings(defaults: MemoryDefaults(), tokens: tokens)
+        let defaults = MemoryDefaults()
+        if scene.saved { defaults.values[ConnectionSettings.serverKey] = scene.server }
+        let settings = ConnectionSettings(defaults: defaults, tokens: tokens)
         let commands = AppCommands(loginItem: FixedLoginItem(scene.login))
         let model = SettingsModel(settings: settings, commands: commands, environment: scene.environment)
         model.tester = { _ in .unreachable }

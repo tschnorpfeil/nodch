@@ -31,7 +31,20 @@ import ServiceManagement
     /// After Save: nil before, "" on success, otherwise why it failed.
     var saved: String?
     var loginError: String?
+    /// "Save on this Mac": what became of keeping the environment's connection.
+    enum Kept: Equatable {
+        case no
+        /// Saved; the saved connection is being tried without the environment.
+        case checking
+        case saved(ConnectionCheck, address: URL)
+        /// Nothing was saved, and why.
+        case failed(String)
+    }
+    private(set) var kept = Kept.no
+    /// The environment's address and token are the saved ones already.
+    private(set) var keepsEnvironment = false
 
+    @ObservationIgnored private let environmentValues: [String: String]
     @ObservationIgnored let settings: ConnectionSettings
     @ObservationIgnored let commands: AppCommands
     @ObservationIgnored var tester: (NodConfiguration) async -> ConnectionCheck = { await ConnectionCheck.run($0) }
@@ -75,6 +88,8 @@ import ServiceManagement
         self.settings = settings
         self.commands = commands
         defaults = settings.defaults
+        environmentValues = environment
+        keepsEnvironment = settings.keeps(environment: environment)
         self.environment = ConnectionSettings.environmentInEffect(environment)
         environmentAddress = self.environment.isEmpty ? nil : (try? NodConfiguration.fromEnvironment(environment))?.baseURL
         // With the environment in charge the field shows the address in effect, read-only.
@@ -171,6 +186,25 @@ import ServiceManagement
             onSaved()
         } catch {
             saved = IslandModel.describe(error)
+        }
+    }
+
+    /// The environment has a token that can be saved for starts without it.
+    var canKeepEnvironment: Bool { ConnectionSettings.canKeep(environmentValues) }
+
+    /// Saves the environment's address and token, then tries the saved connection the way a start from the Finder
+    /// would use it: one GET /api/state without the environment.
+    func keepEnvironment() {
+        guard canKeepEnvironment, kept != .checking else { return }
+        do {
+            let address = try settings.keep(environment: environmentValues)
+            keepsEnvironment = true
+            storedToken = settings.token(for: address) != nil
+            let saved = try settings.resolve(environment: [:])
+            kept = .checking
+            Task { kept = .saved(await tester(saved.configuration), address: address) }
+        } catch {
+            kept = .failed(IslandModel.describe(error))
         }
     }
 

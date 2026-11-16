@@ -10,6 +10,8 @@ All notable changes to nodch are documented here. The format follows
   and Settings says when macOS or another app already uses a shortcut instead of failing silently.
 - The dictation language can be picked in Settings, as well as from the microphone's menu.
 - ⇧⌘C, or a right-click on the answer, copies Nod's whole answer.
+- When nodch gets its token from the environment (a LaunchAgent, a terminal), Settings offers **Save on this Mac**:
+  one click keeps the address and token, so nodch also connects when it is opened from Finder or after a restart.
 
 ### Changed
 - nodch uses about a third of the CPU while Nod works: the spinner turns without redrawing the island 60 times a
