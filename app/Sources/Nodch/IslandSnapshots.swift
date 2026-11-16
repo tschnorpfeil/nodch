@@ -39,6 +39,8 @@ enum IslandSnapshots {
         Scene(name: "rest-hover", state: .rest, hovering: true),
         Scene(name: "working", state: IslandSamples.working()),
         Scene(name: "working-open", state: IslandSamples.working()),
+        Scene(name: "working-open-untitled", state: .working(WorkActivity(title: nil, step: nil, site: nil,
+                                                                             since: Date().addingTimeInterval(-425), doing: .model)), open: true),
         Scene(name: "needs-you", state: .needsYou(IslandSamples.email, more: 0), open: true),
         Scene(name: "needs-you-guarded", state: .needsYou(IslandSamples.email, more: 0), open: true, guarded: true),
         Scene(name: "needs-you-compact", state: .needsYou(IslandSamples.email, more: 2)),

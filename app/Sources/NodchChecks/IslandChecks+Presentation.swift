@@ -67,6 +67,12 @@ extension IslandChecks {
               "presentation: without a step the wing names the title")
         check(P.line(.working(WorkActivity(title: " ", step: nil, site: nil, since: since, doing: .queued))) == "Queued…",
               "presentation: without words the wing says what Nod does")
+        let bare = P.workingCard(WorkActivity(title: nil, step: nil, site: nil, since: since, doing: .model))
+        check(bare.title == "Thinking…" && bare.step == nil, "presentation: an untitled working card says what Nod does once")
+        let stepOnly = P.workingCard(WorkActivity(title: " ", step: "Reading invoices", site: "mail.google.com", since: since, doing: .tool))
+        check(stepOnly.title == "Reading invoices" && stepOnly.step == nil, "presentation: without a title the step is the title")
+        let titled = P.workingCard(WorkActivity(title: "Expense report", step: nil, site: nil, since: since, doing: .model))
+        check(titled.title == "Expense report" && titled.step == "Thinking…", "presentation: a titled card never repeats its title")
         check(P.line(.needsYou(approval("c", title: ""), more: 0)) == "Nod needs you", "presentation: an untitled approval still reads")
         check(P.line(.done(summary: nil)) == "Done" && P.line(.failed(message: "Boom")) == "Boom", "presentation: done and failed lines")
 

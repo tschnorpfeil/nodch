@@ -683,23 +683,27 @@ struct IslandStatusCard: View {
 
     private var working: some View {
         let activity = model.activity
+        let card = activity.map(IslandPresentation.workingCard) ?? (title: "Working…", step: nil)
         return VStack(alignment: .leading, spacing: IslandStyle.gap) {
-            Text(activity?.title ?? "Nod is working")
+            Text(card.title)
                 .font(IslandStyle.title).foregroundStyle(IslandStyle.white(IslandStyle.primary))
                 .fixedSize(horizontal: false, vertical: true)
-            VStack(alignment: .leading, spacing: 7) {
-                if let step = activity?.step, !step.isEmpty {
-                    row(text: step) { SpinRing(size: 11, lineWidth: 1.5, color: IslandStyle.accent) }
-                } else if let activity {
-                    row(text: IslandPresentation.line(.working(activity))) { SpinRing(size: 11, lineWidth: 1.5, color: IslandStyle.accent) }
+            let site = activity?.site.flatMap { $0.isEmpty ? nil : $0 }
+            if card.step != nil || site != nil { VStack(alignment: .leading, spacing: 7) {
+                // The header's sign already spins; the step gets a quiet arrow, not a second spinner.
+                if let step = card.step {
+                    row(text: step) {
+                        Image(systemName: "arrow.turn.down.right").font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(IslandStyle.white(IslandStyle.secondary))
+                    }
                 }
-                if let site = activity?.site, !site.isEmpty {
+                if let site {
                     row(text: site) {
                         Image(systemName: "globe").font(.system(size: 11, weight: .medium))
                             .foregroundStyle(IslandStyle.white(IslandStyle.secondary))
                     }
                 }
-            }
+            } }
             if let error = model.actionError { IslandErrorLine(text: error) }
             HStack(spacing: IslandStyle.buttonGap) {
                 IslandOpenButton(model: model)

@@ -3,6 +3,12 @@
 All notable changes to nodch are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## Unreleased
+
+### Fixed
+- The working card no longer says the same thing three times. Without a title from Nod, what Nod is doing becomes
+  the title, a titled card never repeats its title below it, and only the header spins.
+
 ## 0.3.0 — 2026-11-16
 
 ### Added
