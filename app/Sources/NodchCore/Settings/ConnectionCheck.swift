@@ -38,7 +38,7 @@ public enum ConnectionCheck: Equatable, Sendable {
         case .missingCredentials:
             "nodch has no token or access key for Nod at \(shown). Add the token \(inSettings ? "above" : "in nodch Settings")."
         case .hostNotPermitted:
-            "Nod at \(shown) doesn’t accept this host name. Use the host from Nod’s NOD_PUBLIC_URL, for example localhost."
+            "Nod at \(shown) doesn’t accept this address. It must match Nod’s NOD_PUBLIC_URL exactly: scheme, host and port."
         case .unreachable: "Nothing answers at \(shown). Start Nod, or check the address \(inSettings ? "above" : "in nodch Settings")."
         case .other(let reason): reason
         }

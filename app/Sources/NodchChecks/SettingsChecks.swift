@@ -254,8 +254,9 @@ import NodchCore
         ClientStub.configure { _ in .init(status: 403, body: Data("{\"error\":\"This host is not permitted\"}".utf8)) }
         let host = await ConnectionCheck.run(NodConfiguration(baseURL: URL(string: "http://127.0.0.1:4310")!), session: transport)
         let hostText = host.message(address: URL(string: "http://127.0.0.1:4310")!)
-        check(host == .hostNotPermitted && hostText.contains("NOD_PUBLIC_URL") && hostText.contains("localhost")
-              && hostText.contains("http://127.0.0.1:4310"), "errors: 403 host not permitted says to use the host from NOD_PUBLIC_URL")
+        check(host == .hostNotPermitted && hostText.contains("NOD_PUBLIC_URL") && hostText.contains("exactly")
+              && hostText.contains("http://127.0.0.1:4310") && !hostText.contains("localhost"),
+              "errors: 403 says the address must match NOD_PUBLIC_URL exactly")
         ClientStub.configure { _ in .init(status: 403, mime: "text/plain", body: Data("This host is not permitted".utf8)) }
         check(await ConnectionCheck.run(nod, session: transport) == .hostNotPermitted, "errors: a plain-text 403 is host not permitted too")
 
