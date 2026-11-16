@@ -119,14 +119,18 @@ import Observation
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(answer.text, forType: .string)
         answerCopied = true
-        NSAccessibility.post(element: NSApp as Any, notification: .announcementRequested,
-                             userInfo: [.announcement: IslandPresentation.answerCopied,
-                                        .priority: NSAccessibilityPriorityLevel.high.rawValue])
+        announce(IslandPresentation.answerCopied)
         copiedTask?.cancel()
         copiedTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(1.5))
             if !Task.isCancelled { self?.answerCopied = false }
         }
+    }
+
+    /// Says `text` to VoiceOver now.
+    func announce(_ text: String) {
+        NSAccessibility.post(element: NSApp as Any, notification: .announcementRequested,
+                             userInfo: [.announcement: text, .priority: NSAccessibilityPriorityLevel.high.rawValue])
     }
 
     /// What the open card offers to the keyboard (`IslandPresentation.keyAction`).
@@ -268,10 +272,11 @@ import Observation
     }
 
     private func upload(_ id: Int, _ file: URL) {
-        guard let actions = store.actions else { draft.uploadFailed(id, reason: Self.notConnected); PromiseDrops.discard(file); return }
+        guard let actions = store.actions else { draft.uploadFailed(id, reason: Self.notConnected); announce(IslandPresentation.notSent(Self.notConnected)); PromiseDrops.discard(file); return }
         Task {
             do { draft.uploaded(id, as: try await actions.upload(file: file)) } catch {
                 draft.uploadFailed(id, reason: Self.describe(error))
+                announce(IslandPresentation.notSent(Self.describe(error)))
             }
             // A copy nodch received from Mail or Photos is not needed once it is on Nod (or failed to get there).
             PromiseDrops.discard(file)
@@ -367,6 +372,7 @@ import Observation
         let newQuestion = asking.map { $0.id != questionID } ?? false
         let prefix = newQuestion ? (questionID == nil ? "Couldn’t send the previous message: " : "Couldn’t send the previous answer: ") : ""
         draft.sendFailed(prefix + Self.describe(error), token: token)
+        announce(IslandPresentation.notSent(prefix + Self.describe(error)))
         if isOpen, showsPrompt { focusToken += 1 }
     }
 

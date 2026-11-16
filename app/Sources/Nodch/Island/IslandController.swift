@@ -134,9 +134,8 @@ final class IslandController {
             // prompt. A dropped connection (offline) does not: once back, the island says "Answer ready" again.
             model.answerReady = false
         }
-        if let text = IslandPresentation.announcement(from: old, to: new, answerArrived: arrived) {
-            NSAccessibility.post(element: NSApp as Any, notification: .announcementRequested,
-                                 userInfo: [.announcement: text, .priority: NSAccessibilityPriorityLevel.high.rawValue])
+        if let text = IslandPresentation.announcement(from: old, to: new, answerArrived: arrived, shortcut: model.hotkey) {
+            model.announce(text)
         }
         let newQuestion = IslandPresentation.newQuestion(from: old, to: new)
         if IslandPresentation.waitingID(old) != IslandPresentation.waitingID(new) {
