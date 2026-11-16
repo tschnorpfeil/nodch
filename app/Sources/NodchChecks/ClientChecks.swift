@@ -56,6 +56,19 @@ import NodchCore
             check(mapper.map(finished, now: now) == .done(summary: "Finished"), "newly completed turn shows done")
             check(mapper.map(finished, now: now.addingTimeInterval(1)) == .done(summary: "Finished"), "refresh does not extend completion deadline")
             check(mapper.map(finished, now: now.addingTimeInterval(3)) == .rest, "done expires to rest")
+            // How long the turn took: finishedAt - createdAt (08:00:00.000Z in the fixture). Without a usable pair there
+            // is no duration, and the done state is otherwise unchanged.
+            let ran = String(decoding: fixture(status: "running"), as: UTF8.self)
+            for (finishedAt, expected, label) in [("\"2026-11-13T08:00:42.500Z\"", 42.5, "a finishedAt after createdAt gives the duration"),
+                                                 ("\"2026-11-13T08:01:05Z\"", 65, "a finishedAt without fractions parses too"),
+                                                 ("null", nil, "a missing finishedAt gives no duration"),
+                                                 ("\"yesterday\"", nil, "an unreadable finishedAt gives no duration"),
+                                                 ("\"2026-11-13T07:59:00.000Z\"", nil, "a finishedAt before createdAt gives no duration")] as [(String, Double?, String)] {
+                var timed = NodStateMapper()
+                _ = timed.map(try .decode(Data(ran.utf8)))
+                let done = String(decoding: fixture(), as: UTF8.self).replacingOccurrences(of: "\"finishedAt\":null", with: "\"finishedAt\":\(finishedAt)")
+                check(timed.map(try .decode(Data(done.utf8)), now: now) == .done(summary: "Finished", took: expected), "state: \(label)")
+            }
             check(mapper.map(try .decode(fixture(status: "failed"))) == .failed(message: "Model failed"), "failed turn exposes server error")
             var cold = NodStateMapper()
             check(cold.map(try .decode(fixture(status: "failed"))) == .rest, "a failure from before connecting stays quiet")

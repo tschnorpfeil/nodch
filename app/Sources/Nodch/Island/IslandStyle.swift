@@ -101,7 +101,7 @@ enum IslandMetrics {
     }
 
     /// Widths of the leading and trailing part of the wing, before the geometry clamps them.
-    static func wing(_ wing: IslandWing, line: String, elapsed: TimeInterval?, hint: String, notch: Bool) -> (leading: CGFloat, trailing: CGFloat) {
+    static func wing(_ wing: IslandWing, line: String, elapsed: TimeInterval?, took: TimeInterval? = nil, hint: String, notch: Bool) -> (leading: CGFloat, trailing: CGFloat) {
         let inner = notch ? Self.inner : pillInner
         var leading: CGFloat = 0
         if wing.showsGlyph || wing.showsLine {
@@ -111,6 +111,7 @@ enum IslandMetrics {
         }
         var parts: [CGFloat] = []
         if wing.showsElapsed, let elapsed { parts.append(elapsedWidth(elapsed)) }
+        if wing.showsTook, let took { parts.append(elapsedWidth(took)) }
         if wing.showsStop { parts.append(stop) }
         if wing.more > 0 { parts.append(width("+\(wing.more)") + 12) }
         if wing.showsChevron { parts.append(chevron) }

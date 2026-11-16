@@ -124,6 +124,8 @@ enum IslandSamples {
     static let offline = IslandState.offline(reason: ConnectionCheck.unreachable.message(address: ConnectionSettings.defaultURL))
     static let connecting = IslandState.offline(reason: ConnectionCheck.display(ConnectionSettings.defaultURL))
     static let done = IslandState.done(summary: "Expense report sent to finance")
+    /// A turn that ran 42 s: the wing carries "0:42" after the summary.
+    static let doneTook = IslandState.done(summary: "Expense report sent to finance", took: 42)
 
     /// A Markdown answer as Nod writes it: the wing must read it as plain text, the card render it.
     static let answer = NodAnswer(id: "demo-answer-1", text: """

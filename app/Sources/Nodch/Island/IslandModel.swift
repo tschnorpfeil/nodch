@@ -72,6 +72,8 @@ import Observation
         var wing = IslandWing()
         var line = ""
         var since: Date?
+        /// Done: how long the turn took, when worth saying.
+        var took: TimeInterval?
         /// Files are dragged toward (or over) the closed island.
         var drop = IslandDropZone.none
     }

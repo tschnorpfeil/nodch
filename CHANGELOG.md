@@ -12,6 +12,7 @@ All notable changes to nodch are documented here. The format follows
   pressing ⌥ Space. Below a menu bar the resting island still stays out of the way.
 - Settings › Open Nod in: Open Nod opens the Nod app for a Nod on this Mac and the browser for any other address,
   so it shows the Nod nodch talks to. Choose Nod app or Browser to always use one.
+- When Nod finishes a turn that ran 5 seconds or more, the island says how long it took (m:ss).
 
 ### Fixed
 - Save in Settings tries the saved connection and says whether it worked, instead of only "Saved".
