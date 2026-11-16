@@ -30,6 +30,12 @@ import ServiceManagement
     var test = Test.idle
     /// After Save: nil before, "" on success, otherwise why it failed.
     var saved: String?
+    /// After Save: the saved connection is tried; nil outside of that.
+    enum SavedCheck: Equatable {
+        case checking
+        case done(ConnectionCheck, address: URL)
+    }
+    private(set) var savedCheck: SavedCheck?
     var loginError: String?
     /// "Save on this Mac": what became of keeping the environment's connection.
     enum Kept: Equatable {
@@ -62,6 +68,8 @@ import ServiceManagement
     private(set) var recordingHint: String?
     /// The dictation language; nil follows the system.
     private(set) var speechChoice: String?
+    /// Where "Open Nod" goes.
+    private(set) var openTarget = OpenTarget.automatic
     /// The languages the on-device model offers, grouped as in the microphone's menu.
     var speechLanguages: (yours: [String], others: [String]) = ([], [])
 
@@ -96,6 +104,7 @@ import ServiceManagement
         server = (environmentAddress ?? settings.savedServer).map(ConnectionCheck.display) ?? ""
         storedToken = currentAddress.map { settings.token(for: $0) != nil } ?? false
         speechChoice = PromptSettings.speechLanguage(defaults)
+        openTarget = OpenTarget.saved(defaults)
     }
 
     var usesEnvironment: Bool { !environment.isEmpty }
@@ -121,6 +130,7 @@ import ServiceManagement
     private func resetTest() {
         testRun += 1
         test = .idle
+        savedCheck = nil
     }
 
     private var currentAddress: URL? { try? ConnectionSettings.normalize(server) }
@@ -184,8 +194,22 @@ import ServiceManagement
             resetTest()
             saved = ""
             onSaved()
+            checkSaved(address)
         } catch {
             saved = IslandModel.describe(error)
+        }
+    }
+
+    /// One GET /api/state with what was just saved (the token from the Keychain), shown in place of the static note.
+    private func checkSaved(_ address: URL) {
+        let configuration = NodConfiguration(baseURL: address, credential: settings.token(for: address).map { .bearer($0) } ?? .none)
+        let run = testRun
+        savedCheck = .checking
+        Task {
+            let result = await ConnectionCheck.afterSave(configuration, tester: tester)
+            // Edited since: the result belongs to inputs that are gone.
+            guard run == testRun else { return }
+            savedCheck = .done(result.check, address: address)
         }
     }
 
@@ -282,6 +306,13 @@ import ServiceManagement
         if flags.contains(.shift) { modifiers |= UInt32(shiftKey) }
         if flags.contains(.command) { modifiers |= UInt32(cmdKey) }
         return modifiers
+    }
+
+    /// Takes effect at the next "Open Nod".
+    func chooseOpenTarget(_ target: OpenTarget) {
+        guard target != openTarget else { return }
+        openTarget = target
+        OpenTarget.save(target, defaults: defaults)
     }
 
     // MARK: Start at login

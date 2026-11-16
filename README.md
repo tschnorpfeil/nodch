@@ -73,6 +73,8 @@ too.
 ## Privacy
 
 - nodch talks only to the Nod address you set. It has no telemetry and no other servers.
+- **Open Nod** (and <kbd>⌘ Return</kbd>) opens the Nod app for a Nod on this Mac and your browser for any other
+  address, because the Nod app keeps its own server setting. Settings › Open Nod in changes that.
 - The token is kept in your login Keychain; the address in nodch's preferences.
 - A file you drop is uploaded to your Nod right away, before you press Return.
 - See [SECURITY.md](SECURITY.md) for details and how to report a problem.
@@ -82,7 +84,7 @@ too.
 | You see | Do |
 |---|---|
 | "Nothing answers at …" | Start Nod, or fix the address in Settings. |
-| "doesn’t accept this host name" (403) | Use the host from Nod's `NOD_PUBLIC_URL`, usually `localhost`, not `127.0.0.1`. |
+| "doesn’t accept this address" (403) | The address must match Nod's `NOD_PUBLIC_URL` exactly: scheme, host and port, for example `https://<mac>.<tailnet>.ts.net:4310`. |
 | "Nod asks for a token" (401) | Paste `NOD_AUTH_TOKEN` from Nod's `.env` into Settings and **Save**. It is kept in your Keychain, so it is there however nodch is started. A token set only as an environment variable (a LaunchAgent, a terminal) is missing when you open nodch from Finder: while nodch runs with it, click **Save on this Mac** in Settings once. |
 | "Nod rejected the token" (401) | The saved token is not the one Nod has now. Paste the current `NOD_AUTH_TOKEN` into Settings. |
 | <kbd>⌥ Space</kbd> does nothing | macOS or another app owns the shortcut. Settings says so; choose another one there. |

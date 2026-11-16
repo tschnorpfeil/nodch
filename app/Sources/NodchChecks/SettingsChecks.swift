@@ -27,6 +27,8 @@ import NodchCore
             normalizeChecks()
             firstRunChecks()
             promptChecks()
+            openTargetChecks()
+            reconnectChecks()
             try await errorChecks()
         } catch { check(false, "settings checks: \(error)") }
     }
@@ -184,6 +186,52 @@ import NodchCore
         // UserDefaults removes a key set to nil, which the fake mirrors; a real suite would leave a plist behind.
     }
 
+    static func openTargetChecks() {
+        let local = URL(string: "http://localhost:4310")!, loopback = URL(string: "http://127.0.0.1:4310")!
+        let v6 = URL(string: "http://[::1]:4310")!, tailnet = URL(string: "https://mac.example.ts.net:4310")!
+        check(OpenTarget.automatic.usesApp(address: local, appInstalled: true)
+              && OpenTarget.automatic.usesApp(address: loopback, appInstalled: true)
+              && OpenTarget.automatic.usesApp(address: v6, appInstalled: true),
+              "open target: automatic opens the app for a Nod on this Mac")
+        check(!OpenTarget.automatic.usesApp(address: tailnet, appInstalled: true),
+              "open target: automatic opens the browser for an https tailnet address")
+        check(!OpenTarget.app.usesApp(address: local, appInstalled: false) && !OpenTarget.automatic.usesApp(address: local, appInstalled: false),
+              "open target: without the app installed the browser opens")
+        check(OpenTarget.app.usesApp(address: tailnet, appInstalled: true) && !OpenTarget.browser.usesApp(address: local, appInstalled: true),
+              "open target: Nod app and Browser are taken as chosen")
+        let defaults = FakeDefaults()
+        check(OpenTarget.saved(defaults) == .automatic, "open target: nothing saved is Automatic")
+        OpenTarget.save(.browser, defaults: defaults)
+        check(OpenTarget.saved(defaults) == .browser && defaults.string(forKey: "nodch.openNodIn") == "browser", "open target: the choice is saved")
+        OpenTarget.save(.automatic, defaults: defaults)
+        check(defaults.values["nodch.openNodIn"] == nil && OpenTarget.saved(defaults) == .automatic, "open target: Automatic removes the saved choice")
+        defaults.set("nonsense", forKey: "nodch.openNodIn")
+        check(OpenTarget.saved(defaults) == .automatic, "open target: an unknown saved value is Automatic")
+    }
+
+    static func reconnectChecks() {
+        let now = Date(timeIntervalSince1970: 1_000)
+        var policy = ReconnectPolicy()
+        check(policy.shouldReconnect(.wake, offline: false, now: now), "reconnect: waking reconnects, offline or not")
+        policy = ReconnectPolicy()
+        check(policy.shouldReconnect(.networkReturned, offline: true, now: now), "reconnect: the network back while offline reconnects")
+        policy = ReconnectPolicy()
+        check(!policy.shouldReconnect(.networkReturned, offline: false, now: now), "reconnect: the network back while connected does nothing")
+        policy = ReconnectPolicy()
+        let first = policy.shouldReconnect(.wake, offline: true, now: now)
+        let second = policy.shouldReconnect(.networkReturned, offline: true, now: now.addingTimeInterval(1.9))
+        check(first && !second, "reconnect: two triggers within 2 s reconnect once")
+        check(policy.shouldReconnect(.wake, offline: true, now: now.addingTimeInterval(2.1)), "reconnect: later triggers reconnect again")
+        policy = ReconnectPolicy()
+        _ = policy.shouldReconnect(.networkReturned, offline: false, now: now)
+        check(policy.shouldReconnect(.wake, offline: false, now: now.addingTimeInterval(0.1)), "reconnect: a skipped trigger starts no debounce")
+        check(ReconnectPolicy.networkReturned(wasSatisfied: false, isSatisfied: true)
+              && !ReconnectPolicy.networkReturned(wasSatisfied: nil, isSatisfied: true)
+              && !ReconnectPolicy.networkReturned(wasSatisfied: true, isSatisfied: true)
+              && !ReconnectPolicy.networkReturned(wasSatisfied: true, isSatisfied: false),
+              "reconnect: only unsatisfied to satisfied is a return, not the first report")
+    }
+
     static func normalizeChecks() {
         check((try? ConnectionSettings.normalize("localhost:4310"))?.absoluteString == "http://localhost:4310",
               "settings: an address without a scheme reads as http")
@@ -230,8 +278,9 @@ import NodchCore
         ClientStub.configure { _ in .init(status: 403, body: Data("{\"error\":\"This host is not permitted\"}".utf8)) }
         let host = await ConnectionCheck.run(NodConfiguration(baseURL: URL(string: "http://127.0.0.1:4310")!), session: transport)
         let hostText = host.message(address: URL(string: "http://127.0.0.1:4310")!)
-        check(host == .hostNotPermitted && hostText.contains("NOD_PUBLIC_URL") && hostText.contains("localhost")
-              && hostText.contains("http://127.0.0.1:4310"), "errors: 403 host not permitted says to use the host from NOD_PUBLIC_URL")
+        check(host == .hostNotPermitted && hostText.contains("NOD_PUBLIC_URL") && hostText.contains("exactly")
+              && hostText.contains("http://127.0.0.1:4310") && !hostText.contains("localhost"),
+              "errors: 403 says the address must match NOD_PUBLIC_URL exactly")
         ClientStub.configure { _ in .init(status: 403, mime: "text/plain", body: Data("This host is not permitted".utf8)) }
         check(await ConnectionCheck.run(nod, session: transport) == .hostNotPermitted, "errors: a plain-text 403 is host not permitted too")
 
@@ -246,6 +295,20 @@ import NodchCore
 
         let descriptions = [NodClientError.credentials, .unauthorized, .network("x")].compactMap(\.errorDescription)
             + [ConnectionCheck.unauthorized, .missingCredentials, .unreachable, .hostNotPermitted].map { $0.message(address: address) }
+        // Save tries what it saved: a rejected token is said, a working connection is confirmed, and no token is shown.
+        let secret = "nodch-check-secret-\(UUID().uuidString)"
+        let saved = NodConfiguration(baseURL: URL(string: "https://mac.example.ts.net:4310")!, credential: .bearer(secret))
+        var tried: [NodConfiguration] = []
+        let rejectedAfterSave = await ConnectionCheck.afterSave(saved) { tried.append($0); return .unauthorized }
+        check(tried.count == 1 && rejectedAfterSave.check == .unauthorized && rejectedAfterSave.message.hasPrefix("Saved, but")
+              && rejectedAfterSave.message.contains("rejected") && !rejectedAfterSave.message.contains(secret),
+              "save check: a rejected token is said after Save, without the token")
+        let okAfterSave = await ConnectionCheck.afterSave(saved) { _ in .connected }
+        check(okAfterSave.message == "Saved. Connected to Nod at https://mac.example.ts.net:4310.",
+              "save check: a working connection is confirmed with its address")
+        let goneAfterSave = await ConnectionCheck.afterSave(saved) { _ in .unreachable }
+        check(goneAfterSave.message.contains("Nothing answers at https://mac.example.ts.net:4310"), "save check: unreachable names the address")
+
         check(!descriptions.contains { $0.contains("NOD_AUTH_TOKEN") || $0.contains("NOD_DATA_ROOT") || $0.contains("NOD_URL") },
               "errors: what the person reads names no nodch env var")
 

@@ -61,6 +61,13 @@ import Foundation
         }
     }
 
+    /// Opens the event stream again at once (after the Mac wakes, or when the network returns) instead of waiting out
+    /// the backoff. The session stays the same: an upload, send or answer on its way completes as usual.
+    public func restartStream() {
+        connectionTask?.cancel(); connectionTask = nil
+        start()
+    }
+
     public func disconnect() {
         generation += 1
         connectionTask?.cancel(); connectionTask = nil
@@ -223,7 +230,10 @@ import Foundation
     public func openNod(path: String) {
         let workspace = NSWorkspace.shared
         let fallbackURL = client.configuration.browserURL(path: path)
-        guard let appURL = workspace.urlForApplication(withBundleIdentifier: "dev.nod.desktop") else {
+        let appURL = workspace.urlForApplication(withBundleIdentifier: "dev.nod.desktop")
+        // The app keeps its own server setting: which one opens is the person's choice (Settings › Open Nod in).
+        guard let appURL, OpenTarget.saved(UserDefaults.standard)
+            .usesApp(address: client.configuration.baseURL, appInstalled: true) else {
             workspace.open(fallbackURL)
             return
         }

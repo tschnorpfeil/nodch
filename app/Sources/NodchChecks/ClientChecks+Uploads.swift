@@ -35,6 +35,19 @@ extension ClientChecks {
         ClientStub.configure { _ in .init(body: artifact) }
         let uploaded = try await session.upload(file: text)
         check(uploaded == NodAttachment(id: id, name: "server.txt", mimeType: "text/plain", size: 5), "Artifact JSON maps to NodAttachment, including server filename")
+
+        // The Mac woke while a file was uploading: the stream starts again, the upload still lands.
+        ClientStub.configure { request in
+            if request.url?.path == "/api/uploads" { Thread.sleep(forTimeInterval: 0.15) }
+            return .init(body: artifact)
+        }
+        let waking = Task { try await session.upload(file: text) }
+        try await Task.sleep(for: .milliseconds(40))
+        session.restartStream()
+        let across = try? await waking.value
+        check(across?.id == id, "an upload across a stream restart (wake, network back) still lands")
+        ClientStub.configure { _ in .init(body: artifact) }
+        _ = try await session.upload(file: text)
         let request = ClientStub.requests[0]
         let contentType = request.value(forHTTPHeaderField: "Content-Type") ?? ""
         let boundary = String(contentType.dropFirst("multipart/form-data; boundary=".count))

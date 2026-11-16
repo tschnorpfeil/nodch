@@ -39,6 +39,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let connection = NodConnection(store: store, settings: settings)
             self.connection = connection
             connection.connect()
+            connection.watchSystem()
         }
         let model = SettingsModel(settings: settings, commands: commands)
         // In the demo nothing reconnects: it never talks to Nod.
