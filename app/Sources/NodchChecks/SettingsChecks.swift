@@ -23,6 +23,7 @@ import NodchCore
         do {
             try precedenceChecks(defaults: FakeDefaults())
             try keepChecks()
+            try keepFailureChecks()
             normalizeChecks()
             firstRunChecks()
             promptChecks()
@@ -65,6 +66,28 @@ import NodchCore
         catch { check(tokens.items == before.0 && defaults.values.count == before.1, "keep: without a token nothing is written") }
         do { try settings.keep(environment: ["NOD_URL": "ftp://nod", "NOD_AUTH_TOKEN": secret]); check(false, "keep: bad NOD_URL") }
         catch { check(tokens.items == before.0, "keep: a NOD_URL that cannot be read writes nothing") }
+    }
+
+    /// A Keychain that refuses to write, as when it is locked.
+    final class LockedTokens: TokenStore {
+        var items: [String: String] = [:]
+        func token(account: String) -> String? { items[account] }
+        func setToken(_ token: String, account: String) throws { throw NodClientError.configuration("The Keychain is locked.") }
+        func removeToken(account: String) throws { throw NodClientError.configuration("The Keychain is locked.") }
+    }
+
+    static func keepFailureChecks() throws {
+        let tokens = LockedTokens(), defaults = FakeDefaults()
+        tokens.items["https://nod.example.com:443"] = "earlier"
+        defaults.values[ConnectionSettings.serverKey] = "https://nod.example.com"
+        let settings = ConnectionSettings(defaults: defaults, tokens: tokens)
+        let environment = ["NOD_URL": "http://127.0.0.1:4310", "NOD_AUTH_TOKEN": "from-the-environment"]
+        do { try settings.keep(environment: environment); check(false, "keep: a locked Keychain fails the save") }
+        catch {
+            check(settings.savedServer?.absoluteString == "https://nod.example.com" && tokens.items == ["https://nod.example.com:443": "earlier"]
+                  && !settings.keeps(environment: environment),
+                  "keep: when the Keychain refuses, the earlier address and token stay and nothing counts as saved")
+        }
     }
 
     static func precedenceChecks(defaults: FakeDefaults) throws {

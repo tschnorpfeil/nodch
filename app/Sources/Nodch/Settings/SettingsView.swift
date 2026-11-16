@@ -51,8 +51,9 @@ struct SettingsView: View {
             HStack(spacing: 6) { ProgressView().controlSize(.small); Text("Saved. Trying it without the environment…").foregroundStyle(.secondary) }
         case .saved(.connected, _):
             status("Saved on this Mac. nodch connects without the environment too.", symbol: "checkmark.circle.fill", color: .green)
-        case .saved(let check, let address):
-            status("Saved on this Mac, but without the environment: " + check.message(address: address, inSettings: true),
+        case .saved:
+            // The fields below are locked here, so the usual advice to check them would lead nowhere.
+            status("Saved on this Mac, but a try without the environment did not connect. nodch keeps using the environment.",
                    symbol: "exclamationmark.triangle.fill", color: .orange)
         case .failed(let reason):
             HStack(alignment: .firstTextBaseline) {
