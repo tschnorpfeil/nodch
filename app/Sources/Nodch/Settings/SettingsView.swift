@@ -11,6 +11,7 @@ struct SettingsView: View {
             Form {
                 if model.usesEnvironment { environmentSection }
                 connectionSection
+                openSection
                 promptSection
                 Section {
                     loginRow
@@ -97,6 +98,19 @@ struct SettingsView: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .disabled(model.usesEnvironment)
+    }
+
+    /// Not in the connection section: it works while the environment decides the connection.
+    private var openSection: some View {
+        Section {
+            Picker("Open Nod in", selection: Binding(get: { model.openTarget }, set: { model.chooseOpenTarget($0) })) {
+                ForEach(OpenTarget.allCases, id: \.self) { Text($0.title).tag($0) }
+            }
+        } footer: {
+            Text("Automatic opens the Nod app for a Nod on this Mac and the browser otherwise.")
+                .font(.caption).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 
     private var promptSection: some View {

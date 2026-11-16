@@ -223,7 +223,10 @@ import Foundation
     public func openNod(path: String) {
         let workspace = NSWorkspace.shared
         let fallbackURL = client.configuration.browserURL(path: path)
-        guard let appURL = workspace.urlForApplication(withBundleIdentifier: "dev.nod.desktop") else {
+        let appURL = workspace.urlForApplication(withBundleIdentifier: "dev.nod.desktop")
+        // The app keeps its own server setting: which one opens is the person's choice (Settings › Open Nod in).
+        guard let appURL, OpenTarget.saved(UserDefaults.standard)
+            .usesApp(address: client.configuration.baseURL, appInstalled: true) else {
             workspace.open(fallbackURL)
             return
         }

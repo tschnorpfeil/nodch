@@ -62,6 +62,8 @@ import ServiceManagement
     private(set) var recordingHint: String?
     /// The dictation language; nil follows the system.
     private(set) var speechChoice: String?
+    /// Where "Open Nod" goes.
+    private(set) var openTarget = OpenTarget.automatic
     /// The languages the on-device model offers, grouped as in the microphone's menu.
     var speechLanguages: (yours: [String], others: [String]) = ([], [])
 
@@ -96,6 +98,7 @@ import ServiceManagement
         server = (environmentAddress ?? settings.savedServer).map(ConnectionCheck.display) ?? ""
         storedToken = currentAddress.map { settings.token(for: $0) != nil } ?? false
         speechChoice = PromptSettings.speechLanguage(defaults)
+        openTarget = OpenTarget.saved(defaults)
     }
 
     var usesEnvironment: Bool { !environment.isEmpty }
@@ -282,6 +285,13 @@ import ServiceManagement
         if flags.contains(.shift) { modifiers |= UInt32(shiftKey) }
         if flags.contains(.command) { modifiers |= UInt32(cmdKey) }
         return modifiers
+    }
+
+    /// Takes effect at the next "Open Nod".
+    func chooseOpenTarget(_ target: OpenTarget) {
+        guard target != openTarget else { return }
+        openTarget = target
+        OpenTarget.save(target, defaults: defaults)
     }
 
     // MARK: Start at login

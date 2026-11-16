@@ -27,6 +27,7 @@ import NodchCore
             normalizeChecks()
             firstRunChecks()
             promptChecks()
+            openTargetChecks()
             try await errorChecks()
         } catch { check(false, "settings checks: \(error)") }
     }
@@ -182,6 +183,29 @@ import NodchCore
         check(defaults.values[SpeechLanguage.defaultsKey] == nil && PromptSettings.speechLanguage(defaults) == nil,
               "prompt settings: Automatic removes the saved dictation language")
         // UserDefaults removes a key set to nil, which the fake mirrors; a real suite would leave a plist behind.
+    }
+
+    static func openTargetChecks() {
+        let local = URL(string: "http://localhost:4310")!, loopback = URL(string: "http://127.0.0.1:4310")!
+        let v6 = URL(string: "http://[::1]:4310")!, tailnet = URL(string: "https://mac.example.ts.net:4310")!
+        check(OpenTarget.automatic.usesApp(address: local, appInstalled: true)
+              && OpenTarget.automatic.usesApp(address: loopback, appInstalled: true)
+              && OpenTarget.automatic.usesApp(address: v6, appInstalled: true),
+              "open target: automatic opens the app for a Nod on this Mac")
+        check(!OpenTarget.automatic.usesApp(address: tailnet, appInstalled: true),
+              "open target: automatic opens the browser for an https tailnet address")
+        check(!OpenTarget.app.usesApp(address: local, appInstalled: false) && !OpenTarget.automatic.usesApp(address: local, appInstalled: false),
+              "open target: without the app installed the browser opens")
+        check(OpenTarget.app.usesApp(address: tailnet, appInstalled: true) && !OpenTarget.browser.usesApp(address: local, appInstalled: true),
+              "open target: Nod app and Browser are taken as chosen")
+        let defaults = FakeDefaults()
+        check(OpenTarget.saved(defaults) == .automatic, "open target: nothing saved is Automatic")
+        OpenTarget.save(.browser, defaults: defaults)
+        check(OpenTarget.saved(defaults) == .browser && defaults.string(forKey: "nodch.openNodIn") == "browser", "open target: the choice is saved")
+        OpenTarget.save(.automatic, defaults: defaults)
+        check(defaults.values["nodch.openNodIn"] == nil && OpenTarget.saved(defaults) == .automatic, "open target: Automatic removes the saved choice")
+        defaults.set("nonsense", forKey: "nodch.openNodIn")
+        check(OpenTarget.saved(defaults) == .automatic, "open target: an unknown saved value is Automatic")
     }
 
     static func normalizeChecks() {
