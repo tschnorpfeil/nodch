@@ -51,7 +51,9 @@ import NodchCore
     private func reconnect(for trigger: ReconnectPolicy.Trigger) {
         var offline = false
         if case .offline = store.state { offline = true }
-        if policy.shouldReconnect(trigger, offline: offline) { connect() }
+        guard policy.shouldReconnect(trigger, offline: offline) else { return }
+        // Same server: only the event stream starts again, so a file uploading across a wake is not lost.
+        if let session { session.restartStream() } else { connect() }
     }
 
     func connect() {

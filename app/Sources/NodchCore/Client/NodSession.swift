@@ -61,6 +61,13 @@ import Foundation
         }
     }
 
+    /// Opens the event stream again at once (after the Mac wakes, or when the network returns) instead of waiting out
+    /// the backoff. The session stays the same: an upload, send or answer on its way completes as usual.
+    public func restartStream() {
+        connectionTask?.cancel(); connectionTask = nil
+        start()
+    }
+
     public func disconnect() {
         generation += 1
         connectionTask?.cancel(); connectionTask = nil
