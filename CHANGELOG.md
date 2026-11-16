@@ -10,6 +10,14 @@ All notable changes to nodch are documented here. The format follows
   under the files, and folds away when they go elsewhere. It never takes the keyboard from the app you drag from.
 - At rest the notch keeps a small green dot beside the camera, so you can see nodch is running and connected without
   pressing ⌥ Space. Below a menu bar the resting island still stays out of the way.
+- Settings › Open Nod in: Open Nod opens the Nod app for a Nod on this Mac and the browser for any other address,
+  so it shows the Nod nodch talks to. Choose Nod app or Browser to always use one.
+
+### Fixed
+- Save in Settings tries the saved connection and says whether it worked, instead of only "Saved".
+- After the Mac wakes, or when the network comes back, nodch reconnects at once instead of after up to a minute.
+  A file uploading at that moment still lands.
+- A 403 no longer suggests localhost: it says the address must match Nod's NOD_PUBLIC_URL exactly.
 
 ## 0.2.0 — 2026-11-16
 
