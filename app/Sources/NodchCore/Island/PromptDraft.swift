@@ -120,9 +120,8 @@ public struct PromptDraft: Equatable, Sendable {
     // MARK: Opening and closing
 
     /// The prompt came up. The shortcut turns the microphone on; a click or a drop leaves it as it is, which is off
-    /// for a prompt that was closed.
+    /// for a prompt that was closed. A send that failed while the prompt was hidden still says so until the next send.
     public mutating func open(_ cause: PromptOpenCause) -> [PromptEffect] {
-        error = nil
         notice = nil
         return cause == .hotkey ? startVoice() : []
     }
