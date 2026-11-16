@@ -82,6 +82,13 @@ extension IslandChecks {
         _ = failing.submit()
         failing.sendFailed("503")
         check(failing.error == "503" && failing.display == "Hi" && !failing.sending, "prompt: a failed send keeps the text and says why")
+        var hidden = PromptDraft(text: "Hi")
+        _ = hidden.submit()
+        _ = hidden.closed()
+        hidden.sendFailed("x")
+        _ = hidden.open(.click)
+        check(hidden.error == "x" && hidden.display == "Hi", "prompt: a send that failed while the prompt was hidden still says why")
+        check(hidden.submit() == [.send(prompt: "Hi", attachments: [])] && hidden.error == nil, "prompt: … until the next send")
         // Enter before the first words show: the microphone may have heard some, so it finalizes and sends what came.
         var early = listening()
         check(early.submit() == [.stopVoice(finalize: true)] && early.voice == .finishing, "prompt: Enter before any words still stops the microphone")

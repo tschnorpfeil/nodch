@@ -19,6 +19,14 @@ extension IslandChecks {
         check(!P.closesOnOutsideClick(.approval) && P.closesOnOutsideClick(.click) && P.closesOnOutsideClick(.hotkey),
               "presentation: a card opened for an approval survives clicks in other apps")
 
+        // What a click opens.
+        check(P.clickOpensPrompt(.failed, asking: false), "presentation: a click on a failed island opens the prompt")
+        check(P.clickOpensPrompt(.rest, asking: false) && P.clickOpensPrompt(.done, asking: false) && P.clickOpensPrompt(.working, asking: true),
+              "presentation: a click at rest, after an answer and on Nod's question opens the prompt")
+        check(!P.clickOpensPrompt(.needsYou, asking: false) && !P.clickOpensPrompt(.working, asking: false)
+              && !P.clickOpensPrompt(.offline, asking: false),
+              "presentation: a click on an approval, on work or offline opens the card that fits it")
+
         // What a change of state does.
         check(P.reaction(from: working, to: a, open: nil) == .reveal, "presentation: a new approval reveals the card")
         check(P.reaction(from: a, to: a, open: nil) == .none, "presentation: the same approval does not reopen a collapsed card")

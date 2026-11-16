@@ -78,6 +78,8 @@ import Observation
 
     @ObservationIgnored var onCompactClick: () -> Void = {}
     @ObservationIgnored var onCollapse: () -> Void = {}
+    /// Nod was asked to come to the front: the card gets out of its way.
+    @ObservationIgnored var onOpenedNod: () -> Void = {}
     /// The prompt went out: the card closes and the keyboard goes back.
     @ObservationIgnored var onSent: () -> Void = {}
     /// Settings…, Start at login and Quit for the right-click menus.
@@ -363,9 +365,11 @@ import Observation
         if isOpen, showsPrompt { focusToken += 1 }
     }
 
+    /// "Open Nod" from a button, a link or ⌘Return. Without a connection the card stays and says why.
     func openNod(path: String = "/") {
-        guard let actions = store.actions else { log("Open Nod \(path): \(Self.notConnected)"); return }
+        guard let actions = store.actions else { actionError = Self.notConnected; return }
         actions.openNod(path: path)
+        onOpenedNod()
     }
 
     static func describe(_ error: Error) -> String {

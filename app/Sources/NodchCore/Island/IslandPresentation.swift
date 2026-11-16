@@ -207,6 +207,13 @@ public enum IslandPresentation {
     /// with Settings and Retry, and the microphone stays off.
     public static func hotkeyOpensPrompt(_ tone: IslandTone) -> Bool { tone != .offline }
 
+    /// A click on the island brings the prompt at rest, right after an answer, on Nod's question and after a failed
+    /// turn (the reason stays in the line above the field, so the person can try again). Working, an approval and
+    /// offline open the card that fits them.
+    public static func clickOpensPrompt(_ tone: IslandTone, asking: Bool) -> Bool {
+        asking || tone == .rest || tone == .done || tone == .failed
+    }
+
     /// A card the person opened closes on a click elsewhere. One that opened by itself for an approval stays until it
     /// is answered or collapsed: a click in another app is not a decision about it.
     public static func closesOnOutsideClick(_ cause: OpenCause) -> Bool { cause != .approval }
