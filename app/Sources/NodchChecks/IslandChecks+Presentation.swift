@@ -70,6 +70,16 @@ extension IslandChecks {
         check(P.line(.needsYou(approval("c", title: ""), more: 0)) == "Nod needs you", "presentation: an untitled approval still reads")
         check(P.line(.done(summary: nil)) == "Done" && P.line(.failed(message: "Boom")) == "Boom", "presentation: done and failed lines")
 
+        // How long a finished turn took.
+        let slow = IslandState.done(summary: "Sent", took: 42)
+        check(P.took(slow) == 42 && P.wing(slow, tone: .done, hovering: false)?.showsTook == true,
+              "presentation: a finished turn shows how long it took")
+        check(P.took(.done(summary: "Sent", took: 2)) == nil && P.took(.done(summary: "Sent")) == nil
+              && P.took(.done(summary: "Sent", took: .infinity)) == nil && P.took(working) == nil,
+              "presentation: a quick or unknown duration shows nothing")
+        check(P.wing(.done(summary: "Sent"), tone: .done, hovering: false)?.showsTook == false && P.line(slow) == "Sent",
+              "presentation: no duration leaves the done wing as it was")
+
         // Elapsed time.
         check(P.elapsed(7) == "0:07" && P.elapsed(725) == "12:05" && P.elapsed(3723) == "1:02:03" && P.elapsed(-3) == "0:00",
               "presentation: elapsed time reads m:ss and h:mm:ss")

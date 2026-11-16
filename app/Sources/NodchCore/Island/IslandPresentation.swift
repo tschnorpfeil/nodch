@@ -21,17 +21,29 @@ public struct IslandWing: Equatable, Sendable {
     public var more = 0
     /// Needs you: a chevron says the wing opens into the card.
     public var showsChevron = false
+    /// Done: how long the turn took, on the trailing side, in the same "m:ss" the working counter ended on.
+    public var showsTook = false
 
     public init(showsGlyph: Bool = true, showsLine: Bool = true, showsElapsed: Bool = false, showsStop: Bool = false,
-                showsHint: Bool = false, more: Int = 0, showsChevron: Bool = false) {
+                showsHint: Bool = false, more: Int = 0, showsChevron: Bool = false, showsTook: Bool = false) {
         self.showsGlyph = showsGlyph; self.showsLine = showsLine; self.showsElapsed = showsElapsed; self.showsStop = showsStop
         self.showsHint = showsHint; self.more = more; self.showsChevron = showsChevron
+        self.showsTook = showsTook
     }
 }
 
 public enum IslandPresentation {
     /// How long "done" shows before the island goes back to rest.
     public static let doneDuration: TimeInterval = 3.5
+    /// A turn quicker than this says nothing about how long it took: "0:02" beside every quick reply is noise.
+    public static let minTook: TimeInterval = 5
+
+    /// How long the finished turn took, when it is worth saying: at least `minTook`, and Nod sent a usable span.
+    public static func took(_ state: IslandState) -> TimeInterval? {
+        guard case .done(_, let took) = state, let took, took.isFinite, took >= minTook else { return nil }
+        return took
+    }
+
     /// How long the last answer stays above the prompt, so a follow-up reads in context (as in Pippa).
     public static let followUpWindow: TimeInterval = 10 * 60
     /// An approval card that just appeared ignores Approve and Decline for this long, so a click meant for whatever
@@ -117,7 +129,7 @@ public enum IslandPresentation {
             }
         case .needsYou(let approval, _): return nonEmpty(approval.title) ?? "Nod needs you"
         case .asks(let answer): return nonEmpty(MarkdownPlain.line(answer.text)) ?? "Nod has a question"
-        case .done(let summary): return nonEmpty(summary.map(MarkdownPlain.line)) ?? "Done"
+        case .done(let summary, _): return nonEmpty(summary.map(MarkdownPlain.line)) ?? "Done"
         case .failed(let message): return nonEmpty(message) ?? "Something went wrong"
         }
     }
@@ -191,7 +203,8 @@ public enum IslandPresentation {
             if case .needsYou(_, let more) = state { return IslandWing(more: max(0, more), showsChevron: more <= 0) }
             if case .asks = state { return IslandWing(showsChevron: true) }
             return IslandWing(showsChevron: true)
-        case .done, .failed: return IslandWing()
+        case .done: return IslandWing(showsTook: took(state) != nil)
+        case .failed: return IslandWing()
         }
     }
 

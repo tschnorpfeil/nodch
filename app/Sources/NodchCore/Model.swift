@@ -96,8 +96,9 @@ public enum IslandState: Equatable, Sendable {
     case needsYou(PendingApproval, more: Int)
     /// Nod asked a question with answer choices and waits for the person's pick or own words.
     case asks(NodAnswer)
-    /// A turn just finished; the UI shows it briefly, then returns to rest.
-    case done(summary: String?)
+    /// A turn just finished; the UI shows it briefly, then returns to rest. `took` is how long the turn ran, from
+    /// Nod's `createdAt` to `finishedAt` (so it includes any wait in the queue); nil when Nod sent no usable pair.
+    case done(summary: String?, took: TimeInterval? = nil)
     case failed(message: String)
 }
 

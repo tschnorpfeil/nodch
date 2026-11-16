@@ -202,7 +202,7 @@ final class IslandController {
     static func compact(_ model: IslandModel, _ placement: IslandPlacement, now: Date = Date()) -> (leading: CGFloat, trailing: CGFloat)? {
         guard let wing = model.wing(notch: placement.isNotch) else { return nil }
         let elapsed = model.activity.map { now.timeIntervalSince($0.since) }
-        return IslandMetrics.wing(wing, line: model.wingLine, elapsed: elapsed, hint: model.hotkey ?? "", notch: placement.isNotch)
+        return IslandMetrics.wing(wing, line: model.wingLine, elapsed: elapsed, took: IslandPresentation.took(model.state), hint: model.hotkey ?? "", notch: placement.isNotch)
     }
 
     /// The content the wing shows and its sides after the geometry clamped them. A wing going back to rest keeps its
@@ -210,7 +210,8 @@ final class IslandController {
     static func apply(_ compact: (leading: CGFloat, trailing: CGFloat)?, to model: IslandModel, placement: IslandPlacement) {
         guard let compact, let wing = model.wing(notch: placement.isNotch) else { return }
         let drop = model.isOpen ? IslandDropZone.none : model.dropZone
-        let shown = IslandModel.Shown(tone: model.tone, wing: wing, line: model.wingLine, since: model.activity?.since, drop: drop)
+        let shown = IslandModel.Shown(tone: model.tone, wing: wing, line: model.wingLine, since: model.activity?.since,
+                                     took: IslandPresentation.took(model.state), drop: drop)
         if shown != model.shown { model.shown = shown }
         let rect = IslandGeometry.compact(placement, leading: compact.leading, trailing: compact.trailing)
         var layout = model.layout

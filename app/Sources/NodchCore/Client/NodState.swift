@@ -67,6 +67,7 @@ public struct NodStateMapper: Sendable {
     private var previous: NodState?
     private var doneUntil: Date?
     private var doneSummary: String?
+    private var doneTook: TimeInterval?
     /// A turn seen failing while connected; failures from before connecting or from proactive turns stay quiet.
     private var failedTurn: String?
     public var doneDuration: TimeInterval
@@ -111,8 +112,9 @@ public struct NodStateMapper: Sendable {
            previous.turns.first(where: { $0.id == latest.id })?.status != "succeeded" {
             doneUntil = now.addingTimeInterval(doneDuration)
             doneSummary = state.messages.last(where: { $0.role == "assistant" && $0.turnId == latest.id })?.text
+            doneTook = Self.took(latest)
         }
-        if let until = doneUntil, now < until { return .done(summary: doneSummary) }
+        if let until = doneUntil, now < until { return .done(summary: doneSummary, took: doneTook) }
         return .rest
     }
 
@@ -148,6 +150,13 @@ public struct NodStateMapper: Sendable {
 
     private static let fractionalDate = Date.ISO8601FormatStyle(includingFractionalSeconds: true)
     private static let plainDate = Date.ISO8601FormatStyle()
+
+    /// How long a finished turn ran. nil unless both timestamps parse and the span is not negative.
+    static func took(_ turn: NodState.Turn) -> TimeInterval? {
+        guard let finished = turn.finishedAt.flatMap(date), let created = date(turn.createdAt) else { return nil }
+        let span = finished.timeIntervalSince(created)
+        return span.isFinite && span >= 0 ? span : nil
+    }
 
     private static func date(_ text: String) -> Date? {
         (try? fractionalDate.parse(text)) ?? (try? plainDate.parse(text))

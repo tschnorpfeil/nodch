@@ -43,6 +43,7 @@ enum IslandSnapshots {
         Scene(name: "needs-you-tall", state: .needsYou(IslandSamples.tall, more: 0), open: true),
         Scene(name: "needs-you-cut", state: .needsYou(IslandSamples.cutNote, more: 2), open: true),
         Scene(name: "done", state: IslandSamples.done),
+        Scene(name: "done-took", state: IslandSamples.doneTook),
         Scene(name: "done-markdown", state: IslandSamples.answerDone, answer: IslandSamples.answer),
         Scene(name: "answer-ready", state: .rest, answer: IslandSamples.answer, answerReady: true),
         Scene(name: "answer-open", state: IslandSamples.answerDone, open: true, prompt: PromptDraft(), answer: IslandSamples.answer),

@@ -74,6 +74,12 @@ struct IslandCompactView: View {
             if shown.wing.showsElapsed, let since = shown.since {
                 IslandElapsed(since: since).font(IslandStyle.line).foregroundStyle(IslandStyle.white(IslandStyle.secondary))
             }
+            if shown.wing.showsTook, let took = shown.took {
+                Text(IslandPresentation.elapsed(took))
+                    .font(IslandStyle.line).monospacedDigit().fixedSize()
+                    .foregroundStyle(IslandStyle.white(IslandStyle.secondary))
+                    .accessibilityLabel("Took \(IslandPresentation.elapsed(took))")
+            }
             if shown.wing.showsStop { IslandStopButton(model: model) }
             if shown.wing.more > 0 { IslandMoreBadge(more: shown.wing.more) }
             if shown.wing.showsChevron {
