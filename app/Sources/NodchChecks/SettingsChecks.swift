@@ -28,6 +28,7 @@ import NodchCore
             firstRunChecks()
             promptChecks()
             openTargetChecks()
+            reconnectChecks()
             try await errorChecks()
         } catch { check(false, "settings checks: \(error)") }
     }
@@ -206,6 +207,29 @@ import NodchCore
         check(defaults.values["nodch.openNodIn"] == nil && OpenTarget.saved(defaults) == .automatic, "open target: Automatic removes the saved choice")
         defaults.set("nonsense", forKey: "nodch.openNodIn")
         check(OpenTarget.saved(defaults) == .automatic, "open target: an unknown saved value is Automatic")
+    }
+
+    static func reconnectChecks() {
+        let now = Date(timeIntervalSince1970: 1_000)
+        var policy = ReconnectPolicy()
+        check(policy.shouldReconnect(.wake, offline: false, now: now), "reconnect: waking reconnects, offline or not")
+        policy = ReconnectPolicy()
+        check(policy.shouldReconnect(.networkReturned, offline: true, now: now), "reconnect: the network back while offline reconnects")
+        policy = ReconnectPolicy()
+        check(!policy.shouldReconnect(.networkReturned, offline: false, now: now), "reconnect: the network back while connected does nothing")
+        policy = ReconnectPolicy()
+        let first = policy.shouldReconnect(.wake, offline: true, now: now)
+        let second = policy.shouldReconnect(.networkReturned, offline: true, now: now.addingTimeInterval(1.9))
+        check(first && !second, "reconnect: two triggers within 2 s reconnect once")
+        check(policy.shouldReconnect(.wake, offline: true, now: now.addingTimeInterval(2.1)), "reconnect: later triggers reconnect again")
+        policy = ReconnectPolicy()
+        _ = policy.shouldReconnect(.networkReturned, offline: false, now: now)
+        check(policy.shouldReconnect(.wake, offline: false, now: now.addingTimeInterval(0.1)), "reconnect: a skipped trigger starts no debounce")
+        check(ReconnectPolicy.networkReturned(wasSatisfied: false, isSatisfied: true)
+              && !ReconnectPolicy.networkReturned(wasSatisfied: nil, isSatisfied: true)
+              && !ReconnectPolicy.networkReturned(wasSatisfied: true, isSatisfied: true)
+              && !ReconnectPolicy.networkReturned(wasSatisfied: true, isSatisfied: false),
+              "reconnect: only unsatisfied to satisfied is a return, not the first report")
     }
 
     static func normalizeChecks() {
