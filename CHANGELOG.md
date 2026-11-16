@@ -3,7 +3,7 @@
 All notable changes to nodch are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## Unreleased
+## 0.3.0 — 2026-11-16
 
 ### Added
 - Drag files toward the notch and the island grows into a large drop target; it lights up and grows a little more
