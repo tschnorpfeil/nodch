@@ -174,6 +174,8 @@ struct IslandPromptCard: View {
                 // The approval waits while the person types: one click shows its card, the draft stays. The card's
                 // buttons wait out the guard again from now.
                 Button {
+                    // Leaving the prompt turns the microphone off, as closing it does; the words stay.
+                    model.perform(model.draft.closed())
                     model.showsPrompt = false
                     model.startAnswerGuard()
                 } label: {
