@@ -18,6 +18,12 @@ All notable changes to nodch are documented here. The format follows
 - After the Mac wakes, or when the network comes back, nodch reconnects at once instead of after up to a minute.
   A file uploading at that moment still lands.
 - A 403 no longer suggests localhost: it says the address must match Nod's NOD_PUBLIC_URL exactly.
+- Open Nod and Open in Nod close the card, as ⌘↩ does. Without a connection the card says so instead of doing nothing.
+- A click on an island that shows a failed turn opens the prompt, with the reason above the field, so you can try
+  again.
+- A send that fails while the prompt is hidden still says why when you open it again, until the next send.
+- An approval that arrives while you type is one click away: "Show" in the prompt opens it, and its buttons wait
+  out the usual moment before they take a click.
 
 ## 0.2.0 — 2026-11-16
 
