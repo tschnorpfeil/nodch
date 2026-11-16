@@ -37,6 +37,12 @@ final class IslandController {
         model.onCompactClick = { [weak self] in self?.compactClicked() }
         model.onCollapse = { [weak self] in self?.presenter.close() }
         model.onSent = { [weak self] in self?.closePrompt() }
+        // Nod comes to the front, so the keyboard goes there, not back to the app before; a draft stays for next
+        // time, neither sent nor discarded.
+        model.onOpenedNod = { [weak self] in
+            self?.previousApp = nil
+            self?.presenter.close()
+        }
         presenter.view.onHover = { [weak self] inside in
             guard let self, model.hovering != inside else { return }
             model.hovering = inside
@@ -137,6 +143,8 @@ final class IslandController {
             model.actionError = nil; model.startAnswerGuard(); model.picked = []; model.highlightedChoice = nil
         }
         if case .working = new {} else if case .working = old { model.actionError = nil }
+        // "Not connected" from Open Nod no longer holds once the connection changed.
+        if case .offline = old, old != new { model.actionError = nil }
         // An open card turns into the answer (with the prompt under it) when Nod finishes or asks, so it stays at rest.
         if model.isOpen, model.tone == .done || model.asking != nil { model.showsPrompt = true }
         switch IslandPresentation.reaction(from: old, to: new, open: openCause) {
@@ -301,12 +309,7 @@ final class IslandController {
         case .stop: model.stop()
         case .sendPicks: model.sendPicks()
         case .copyAnswer: model.copyAnswer()
-        case .openNod:
-            // The "Open Nod" button's path. Nod comes to the front, so the keyboard goes there, not back to the app
-            // before; a draft stays for next time, neither sent nor discarded.
-            model.openNod()
-            previousApp = nil
-            presenter.close()
+        case .openNod: model.openNod()
         }
         return true
     }

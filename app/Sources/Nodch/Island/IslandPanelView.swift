@@ -704,6 +704,7 @@ struct IslandStatusCard: View {
                     IslandScrollingText(text: text, maxHeight: min(IslandStyle.bodyMaxHeight, model.layout.maxContent - 120), well: false)
                 }
             }
+            if let error = model.actionError { IslandErrorLine(text: error) }
             HStack(spacing: IslandStyle.buttonGap) {
                 Spacer(minLength: 0)
                 if model.tone == .offline {
