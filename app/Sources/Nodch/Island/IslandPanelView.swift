@@ -17,7 +17,9 @@ struct IslandPanelView: View {
             VStack(alignment: .leading, spacing: IslandStyle.gap) {
                 if !layout.notch { header }
                 ZStack(alignment: .topLeading) {
-                    if model.showsPromptCard {
+                    if model.dropTray {
+                        IslandDropTray(over: model.dropZone == .over).transition(.opacity)
+                    } else if model.showsPromptCard {
                         IslandPromptCard(model: model, focused: $promptFocused).transition(.opacity)
                     } else {
                         IslandStatusCard(model: model).transition(.opacity)
@@ -25,6 +27,7 @@ struct IslandPanelView: View {
                 }
                 .animation(IslandStyle.fade, value: model.showsPrompt)
                 .animation(IslandStyle.fade, value: model.tone)
+                .animation(IslandStyle.fade, value: model.dropTray)
             }
             .padding(.horizontal, IslandStyle.padding)
             .padding(.top, layout.notch ? IslandStyle.notchTop : IslandStyle.padding - 2)
@@ -33,7 +36,8 @@ struct IslandPanelView: View {
             .fixedSize(horizontal: false, vertical: true)
             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { onHeight($0) }
         }
-        .overlay { if model.dropZone == .over { dropHighlight(layout) } }
+        // The tray lights up by itself; any other open card lights up as a whole.
+        .overlay { if model.dropZone == .over, !model.dropTray { dropHighlight(layout) } }
         .animation(IslandStyle.fade, value: model.dropZone)
         .frame(maxHeight: .infinity, alignment: .top)
         .fontDesign(.rounded)
@@ -115,6 +119,39 @@ struct IslandPanelView: View {
             .accessibilityLabel("Collapse")
         }
         .contextMenu { IslandAppMenu(commands: model.commands) }
+    }
+}
+
+/// Files dragged toward the closed island: the card grows into one large target, and grows a little more and lights
+/// up while they are over it. Dropped, they become chips in the prompt; nothing is sent until Return.
+// Adapted from Pippa: app/Sources/Pippa/Views/IslandViews.swift (IslandPanelView.dropTray)
+struct IslandDropTray: View {
+    var over: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: IslandStyle.wellRadius, style: .continuous)
+        VStack(spacing: IslandStyle.buttonGap) {
+            Image(systemName: "arrow.down.doc.fill")
+                .font(.system(size: 28, weight: .medium))
+                .foregroundStyle(over ? IslandStyle.accent : IslandStyle.white(IslandStyle.secondary))
+                .symbolEffect(.bounce, value: reduceMotion ? false : over)
+                .padding(.bottom, 2)
+            Text("Drop here for Nod")
+                .font(IslandStyle.title).foregroundStyle(IslandStyle.white(IslandStyle.primary))
+            Text("They upload right away. Nothing is sent until Return.")
+                .font(IslandStyle.small).foregroundStyle(IslandStyle.white(IslandStyle.secondary))
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .multilineTextAlignment(.center)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, over ? 30 : 24).padding(.horizontal, IslandStyle.padding)
+        .background(shape.fill(over ? IslandStyle.accent.opacity(0.14) : IslandStyle.white(0.06)))
+        .overlay(shape.strokeBorder(over ? IslandStyle.accent : IslandStyle.white(0.18),
+                                    style: StrokeStyle(lineWidth: over ? 1.5 : 1, dash: over ? [] : [5, 4])))
+        .animation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.8), value: over)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(over ? "Release to attach the files for Nod" : "Drop here for Nod")
     }
 }
 

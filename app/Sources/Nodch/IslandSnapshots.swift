@@ -15,6 +15,8 @@ enum IslandSnapshots {
         var hovering = false
         var level: Float = 0
         var drop = IslandDropZone.none
+        /// The card opened as the drop tray for files dragged toward it.
+        var tray = false
         var answer: NodAnswer?
         var picked: Set<String> = []
         /// The click guard still holds: Approve, Decline and the choices show dimmed.
@@ -64,6 +66,8 @@ enum IslandSnapshots {
         Scene(name: "drop-near", state: .rest, drop: .near),
         Scene(name: "drop-over", state: IslandSamples.working(), drop: .over),
         Scene(name: "drop-open", state: .rest, open: true, prompt: IslandSamples.attachments, drop: .over),
+        Scene(name: "drop-tray", state: .rest, open: true, drop: .near, tray: true),
+        Scene(name: "drop-tray-over", state: IslandSamples.working(), open: true, drop: .over, tray: true),
     ].map { scene in
         var scene = scene
         if scene.name == "working-open" { scene.open = true }
@@ -120,6 +124,7 @@ enum IslandSnapshots {
         }
         model.voiceLevel = scene.level
         model.dropZone = scene.drop
+        model.dropTray = scene.tray
         var height: CGFloat = 200
         var view: IslandView?
         func layout() {

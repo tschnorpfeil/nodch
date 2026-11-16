@@ -8,6 +8,14 @@ public enum IslandDropZone: Equatable, Sendable {
     /// How far below the top of the display a drag counts as heading for the island.
     public static let reach: CGFloat = 160
 
+    /// How far around the open drop tray the pointer may stray before the tray folds away.
+    public static let trayMargin: CGFloat = 48
+
+    /// The pointer is on or close to the open tray (`tray`: its window frame).
+    public static func keepsTray(pointer: CGPoint, tray: CGRect) -> Bool {
+        !tray.isEmpty && tray.insetBy(dx: -trayMargin, dy: -trayMargin).contains(pointer)
+    }
+
     /// The pointer is near the top of the display the island is on (not of a neighbour whose top lines up with it).
     public static func isNear(pointer: CGPoint, placement: IslandPlacement, screens: [CGRect]) -> Bool {
         let island: CGPoint

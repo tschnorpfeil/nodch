@@ -215,5 +215,14 @@ extension IslandChecks {
               "drop: lower down, or on another display, is not")
         check(IslandPresentation.takesKey(.drop) && IslandPresentation.closesOnOutsideClick(.drop),
               "drop: a drop is the person's own action and takes the keyboard")
+        check(!IslandPresentation.takesKey(.dropTray) && IslandPresentation.closesOnOutsideClick(.dropTray),
+              "drop: the tray never takes the keyboard from the app the drag comes from")
+        let tray = CGRect(x: 600, y: 760, width: 400, height: 220)
+        check(IslandDropZone.keepsTray(pointer: CGPoint(x: 800, y: 730), tray: tray)
+              && !IslandDropZone.keepsTray(pointer: CGPoint(x: 800, y: 600), tray: tray)
+              && !IslandDropZone.keepsTray(pointer: CGPoint(x: 800, y: 900), tray: .zero),
+              "drop: the open tray stays while the pointer is close to it, and folds away further off")
+        check(IslandPresentation.reaction(from: .rest, to: .needsYou(IslandChecks.approval("t1"), more: 0), open: .dropTray) == .reveal,
+              "drop: an approval takes the tray's place")
     }
 }

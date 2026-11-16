@@ -39,7 +39,11 @@ extension IslandChecks {
         check(P.acceptsAnswer(shownFor: P.answerGuard), "presentation: an approval answers after the guard")
 
         // Wings.
-        check(P.wing(.rest, tone: .rest, hovering: false) == nil, "presentation: rest is just the notch")
+        let idle = P.wing(.rest, tone: .rest, hovering: false)
+        check(idle != nil && idle?.showsGlyph == true && idle?.showsLine == false && idle?.showsHint == false,
+              "presentation: at rest the notch keeps a small presence, the connected dot alone")
+        check(P.wing(.rest, tone: .rest, hovering: false, notch: false) == nil,
+              "presentation: below a menu bar the resting island stays out of the way")
         check(P.wing(.rest, tone: .rest, hovering: true)?.showsHint == true, "presentation: hovering the resting notch reveals the shortcut")
         let offline = IslandState.offline(reason: "x")
         check(P.wing(offline, tone: .offline, hovering: false)?.showsLine == false && P.wing(offline, tone: .offline, hovering: true)?.showsLine == true,

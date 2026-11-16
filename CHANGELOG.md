@@ -3,6 +3,14 @@
 All notable changes to nodch are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## Unreleased
+
+### Added
+- Drag files toward the notch and the island grows into a large drop target; it lights up and grows a little more
+  under the files, and folds away when they go elsewhere. It never takes the keyboard from the app you drag from.
+- At rest the notch keeps a small green dot beside the camera, so you can see nodch is running and connected without
+  pressing ⌥ Space. Below a menu bar the resting island still stays out of the way.
+
 ## 0.2.0 — 2026-11-16
 
 ### Added

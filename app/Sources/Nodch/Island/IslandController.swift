@@ -61,6 +61,7 @@ final class IslandController {
             guard let self else { return }
             openCause = nil
             model.isOpen = false
+            model.dropTray = false
             if !model.answerReady { model.keptAnswerID = nil }
             model.highlightedChoice = nil
             model.perform(model.draft.closed())
@@ -168,7 +169,7 @@ final class IslandController {
 
     func refresh() {
         // A card on a state with nothing to show folds away (done went back to rest).
-        if model.isOpen, !model.showsPrompt, model.tone == .rest { presenter.close() }
+        if model.isOpen, !model.showsPrompt, !model.dropTray, model.tone == .rest { presenter.close() }
         if presenter.isIdle, !model.isOpen, let placement = Self.placement(), placement != presenter.placement {
             presenter.place(placement, compact: Self.compact(model, placement))
         }
@@ -191,7 +192,7 @@ final class IslandController {
 
     /// The wing's two sides for the current state, or nil for rest.
     static func compact(_ model: IslandModel, _ placement: IslandPlacement, now: Date = Date()) -> (leading: CGFloat, trailing: CGFloat)? {
-        guard let wing = model.wing else { return nil }
+        guard let wing = model.wing(notch: placement.isNotch) else { return nil }
         let elapsed = model.activity.map { now.timeIntervalSince($0.since) }
         return IslandMetrics.wing(wing, line: model.wingLine, elapsed: elapsed, hint: model.hotkey ?? "", notch: placement.isNotch)
     }
@@ -199,7 +200,7 @@ final class IslandController {
     /// The content the wing shows and its sides after the geometry clamped them. A wing going back to rest keeps its
     /// last content, so its words fade with the shape instead of vanishing first.
     static func apply(_ compact: (leading: CGFloat, trailing: CGFloat)?, to model: IslandModel, placement: IslandPlacement) {
-        guard let compact, let wing = model.wing else { return }
+        guard let compact, let wing = model.wing(notch: placement.isNotch) else { return }
         let drop = model.isOpen ? IslandDropZone.none : model.dropZone
         let shown = IslandModel.Shown(tone: model.tone, wing: wing, line: model.wingLine, since: model.activity?.since, drop: drop)
         if shown != model.shown { model.shown = shown }
@@ -237,6 +238,7 @@ final class IslandController {
             presenter.place(placement, compact: Self.compact(model, placement))
         }
         guard presenter.placement != nil else { return }
+        model.dropTray = cause == .dropTray
         switch cause {
         case .hotkey where !IslandPresentation.hotkeyOpensPrompt(model.tone):
             model.showsPrompt = false
@@ -252,11 +254,14 @@ final class IslandController {
             if model.isOpen, model.showsPrompt { return }
             // Nod's question is answered in the prompt card; an approval has its own card.
             model.showsPrompt = model.asking != nil
+        case .dropTray:
+            // Files on their way: the card is one large target until they land (then it turns into the prompt).
+            model.showsPrompt = false
         }
         openCause = cause
         model.isOpen = true
-        // Opened, so read: the island stops saying "Answer ready".
-        model.answerReady = false
+        // Opened, so read: the island stops saying "Answer ready". The drop tray shows no answer, so nothing is read.
+        if cause != .dropTray { model.answerReady = false }
         presenter.open(key: IslandPresentation.takesKey(cause))
         if IslandPresentation.takesKey(cause), model.showsPrompt { model.focusToken += 1 }
         refresh()
@@ -324,7 +329,7 @@ final class IslandController {
 
     // MARK: Drops
 
-    /// A file drag in another app: near the top of the island's display the closed island shows where to drop.
+    /// A file drag in another app: near the top of the island's display the closed island grows into a drop tray.
     private func followDrag(_ type: NSEvent.EventType) {
         let board = NSPasteboard(name: .drag)
         switch type {
@@ -344,7 +349,11 @@ final class IslandController {
                 presenter.place(placement, compact: Self.compact(model, placement))
             }
             guard let placement = presenter.placement, model.dropZone != .over else { return }
-            let near = IslandDropZone.isNear(pointer: NSEvent.mouseLocation, placement: placement, screens: NSScreen.screens.map(\.frame))
+            let pointer = NSEvent.mouseLocation
+            // The open tray reaches further down than the zone that opened it: it stays while the pointer is close to
+            // it, so its edge does not fold it away under the pointer.
+            let near = IslandDropZone.isNear(pointer: pointer, placement: placement, screens: NSScreen.screens.map(\.frame))
+                || openCause == .dropTray && IslandDropZone.keepsTray(pointer: pointer, tray: presenter.panel.frame)
             setDropZone(near ? .near : .none)
         default:
             break
@@ -355,9 +364,18 @@ final class IslandController {
         if over { setDropZone(.over) } else if model.dropZone == .over { setDropZone(.near) }
     }
 
+    /// The zone, and with it the tray: it opens when files come near the closed island and folds away when they
+    /// leave. A card the person or an approval opened stays as it is and takes the files where it is.
     private func setDropZone(_ zone: IslandDropZone) {
         guard model.dropZone != zone else { return }
         model.dropZone = zone
+        if zone != .none, !model.isOpen {
+            open(.dropTray)
+        } else if zone == .none, openCause == .dropTray {
+            presenter.close()
+        }
+        // During a drag the island gets no mouse-exited event: the files went elsewhere, so the pointer did too.
+        if zone == .none { model.hovering = false }
         refresh()
     }
 
@@ -365,12 +383,18 @@ final class IslandController {
     /// file, each uploading at once. Nothing is sent until Return.
     private func dropped(_ files: [DroppedFile]) {
         dragEnd?.cancel()
+        // The tray the files landed on turns into the prompt instead of folding away first.
+        let fromTray = openCause == .dropTray
+        if fromTray {
+            openCause = .drop
+            model.dropTray = false
+        }
         setDropZone(.none)
         // An empty drop still opens the prompt: its notice says nothing arrived, instead of the drop vanishing.
         let front = NSWorkspace.shared.frontmostApplication
         if front?.processIdentifier != ProcessInfo.processInfo.processIdentifier { previousApp = front }
         if model.isOpen {
-            if !model.showsPrompt {
+            if !model.showsPrompt || fromTray {
                 model.showsPrompt = true
                 model.perform(model.draft.open(.drop))
             }
