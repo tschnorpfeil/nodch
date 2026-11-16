@@ -22,11 +22,72 @@ import NodchCore
     static func run() async {
         do {
             try precedenceChecks(defaults: FakeDefaults())
+            try keepChecks()
+            try keepFailureChecks()
             normalizeChecks()
             firstRunChecks()
             promptChecks()
             try await errorChecks()
         } catch { check(false, "settings checks: \(error)") }
+    }
+
+    /// "Save on this Mac": the environment's connection is kept for a start without it.
+    static func keepChecks() throws {
+        let tokens = FakeTokens(), defaults = FakeDefaults()
+        let settings = ConnectionSettings(defaults: defaults, tokens: tokens)
+        let secret = "nodch-check-secret-\(UUID().uuidString)"
+        let environment = ["NOD_URL": "http://127.0.0.1:4310/", "NOD_AUTH_TOKEN": secret]
+        check(ConnectionSettings.canKeep(environment) && !ConnectionSettings.canKeep(["NOD_URL": "http://127.0.0.1:4310"])
+              && !ConnectionSettings.canKeep(["NOD_AUTH_TOKEN": "", "NOD_DATA_ROOT": "/nod"]),
+              "keep: only an environment with a token can be saved")
+        check(!settings.keeps(environment: environment) && tokens.items.isEmpty && defaults.values.isEmpty,
+              "keep: nothing is saved before the click")
+
+        try settings.keep(environment: environment)
+        let later = try settings.resolve(environment: [:])
+        let request = try later.configuration.request(path: "/api/state")
+        check(later.source == .saved && later.address.absoluteString == "http://127.0.0.1:4310"
+              && request.value(forHTTPHeaderField: "Authorization") == "Bearer \(secret)",
+              "keep: a start without the environment uses the same address and token")
+        check(settings.keeps(environment: environment), "keep: the environment's connection counts as saved")
+        check(!defaults.values.values.contains { "\($0)".contains(secret) } && tokens.items == ["http://127.0.0.1:4310": secret],
+              "keep: the token goes to the token store only")
+        check(!settings.keeps(environment: ["NOD_URL": "http://127.0.0.1:4310", "NOD_AUTH_TOKEN": "another"])
+              && !settings.keeps(environment: ["NOD_URL": "http://localhost:4310", "NOD_AUTH_TOKEN": secret]),
+              "keep: another token or address is not the saved one")
+
+        // Without NOD_URL the environment means Nod's default address, and that one is saved.
+        let plain = ConnectionSettings(defaults: FakeDefaults(), tokens: FakeTokens())
+        check(try plain.keep(environment: ["NOD_AUTH_TOKEN": secret]) == NodConfiguration.defaultURL,
+              "keep: without NOD_URL the address the environment means is saved")
+
+        let before = (tokens.items, defaults.values.count)
+        do { try settings.keep(environment: ["NOD_DATA_ROOT": "/nod"]); check(false, "keep: an access key is not saved") }
+        catch { check(tokens.items == before.0 && defaults.values.count == before.1, "keep: without a token nothing is written") }
+        do { try settings.keep(environment: ["NOD_URL": "ftp://nod", "NOD_AUTH_TOKEN": secret]); check(false, "keep: bad NOD_URL") }
+        catch { check(tokens.items == before.0, "keep: a NOD_URL that cannot be read writes nothing") }
+    }
+
+    /// A Keychain that refuses to write, as when it is locked.
+    final class LockedTokens: TokenStore {
+        var items: [String: String] = [:]
+        func token(account: String) -> String? { items[account] }
+        func setToken(_ token: String, account: String) throws { throw NodClientError.configuration("The Keychain is locked.") }
+        func removeToken(account: String) throws { throw NodClientError.configuration("The Keychain is locked.") }
+    }
+
+    static func keepFailureChecks() throws {
+        let tokens = LockedTokens(), defaults = FakeDefaults()
+        tokens.items["https://nod.example.com:443"] = "earlier"
+        defaults.values[ConnectionSettings.serverKey] = "https://nod.example.com"
+        let settings = ConnectionSettings(defaults: defaults, tokens: tokens)
+        let environment = ["NOD_URL": "http://127.0.0.1:4310", "NOD_AUTH_TOKEN": "from-the-environment"]
+        do { try settings.keep(environment: environment); check(false, "keep: a locked Keychain fails the save") }
+        catch {
+            check(settings.savedServer?.absoluteString == "https://nod.example.com" && tokens.items == ["https://nod.example.com:443": "earlier"]
+                  && !settings.keeps(environment: environment),
+                  "keep: when the Keychain refuses, the earlier address and token stay and nothing counts as saved")
+        }
     }
 
     static func precedenceChecks(defaults: FakeDefaults) throws {

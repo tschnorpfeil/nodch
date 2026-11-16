@@ -83,7 +83,7 @@ too.
 |---|---|
 | "Nothing answers at …" | Start Nod, or fix the address in Settings. |
 | "doesn’t accept this host name" (403) | Use the host from Nod's `NOD_PUBLIC_URL`, usually `localhost`, not `127.0.0.1`. |
-| "Nod asks for a token" (401) | Paste `NOD_AUTH_TOKEN` from Nod's `.env` into Settings and **Save**. It is kept in your Keychain, so it is there however nodch is started. A token set only as an environment variable (a LaunchAgent, a terminal) is missing when you open nodch from Finder. |
+| "Nod asks for a token" (401) | Paste `NOD_AUTH_TOKEN` from Nod's `.env` into Settings and **Save**. It is kept in your Keychain, so it is there however nodch is started. A token set only as an environment variable (a LaunchAgent, a terminal) is missing when you open nodch from Finder: while nodch runs with it, click **Save on this Mac** in Settings once. |
 | "Nod rejected the token" (401) | The saved token is not the one Nod has now. Paste the current `NOD_AUTH_TOKEN` into Settings. |
 | <kbd>⌥ Space</kbd> does nothing | macOS or another app owns the shortcut. Settings says so; choose another one there. |
 | "Voice is off: allow nodch…" | Click **Open Settings** next to it and allow nodch under Microphone. |
@@ -110,7 +110,8 @@ Environment variables override Settings, which is handy for scripts and LaunchAg
 NOD_URL=http://localhost:4310 NOD_AUTH_TOKEN=<token> swift run --package-path app Nodch
 ```
 
-`NOD_DATA_ROOT=<nod>/.local` reads the access key of a Nod run from source instead of a token.
+`NOD_DATA_ROOT=<nod>/.local` reads the access key of a Nod run from source instead of a token. With a token in the
+environment, **Save on this Mac** in Settings keeps the connection for starts without it.
 
 Without a Nod at hand:
 

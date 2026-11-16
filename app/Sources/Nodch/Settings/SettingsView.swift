@@ -35,11 +35,42 @@ struct SettingsView: View {
             } icon: {
                 Image(systemName: "terminal").foregroundStyle(.secondary)
             }
+            if model.canKeepEnvironment { keepRow }
         }
     }
 
     private var environmentDetail: String {
-        "nodch ignores the fields below while the environment sets the connection. Change it where nodch is started, for example in its LaunchAgent."
+        let rule = "nodch ignores the fields below while the environment sets the connection. Change it where nodch is started, for example in its LaunchAgent."
+        guard model.canKeepEnvironment, !model.keepsEnvironment else { return rule }
+        return rule + " Opened from the Finder, nodch has no environment: save the connection on this Mac to stay connected there too."
+    }
+
+    @ViewBuilder private var keepRow: some View {
+        switch model.kept {
+        case .checking:
+            HStack(spacing: 6) { ProgressView().controlSize(.small); Text("Saved. Trying it without the environment…").foregroundStyle(.secondary) }
+        case .saved(.connected, _):
+            status("Saved on this Mac. nodch connects without the environment too.", symbol: "checkmark.circle.fill", color: .green)
+        case .saved:
+            // The fields below are locked here, so the usual advice to check them would lead nowhere.
+            status("Saved on this Mac, but a try without the environment did not connect. nodch keeps using the environment.",
+                   symbol: "exclamationmark.triangle.fill", color: .orange)
+        case .failed(let reason):
+            HStack(alignment: .firstTextBaseline) {
+                status(reason, symbol: "exclamationmark.triangle.fill", color: .red)
+                Spacer(minLength: 8)
+                Button("Save on this Mac") { model.keepEnvironment() }
+            }
+        case .no:
+            if model.keepsEnvironment {
+                status("Also saved on this Mac, for when nodch starts without the environment.", symbol: "key.fill", color: .secondary)
+            } else {
+                HStack {
+                    Spacer(minLength: 0)
+                    Button("Save on this Mac") { model.keepEnvironment() }
+                }
+            }
+        }
     }
 
     private var connectionSection: some View {

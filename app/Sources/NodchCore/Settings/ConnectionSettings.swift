@@ -100,6 +100,30 @@ public enum TokenChange: Equatable, Sendable {
         return server
     }
 
+    /// The environment carries a token nodch can keep. An access key stays in the file Nod writes.
+    nonisolated public static func canKeep(_ environment: [String: String]) -> Bool {
+        !(environment["NOD_AUTH_TOKEN"] ?? "").isEmpty
+    }
+
+    /// Saves the address and token the environment sets, so nodch also connects when it is started without them:
+    /// from the Finder, or after a restart. Only on the person's click, never on its own.
+    @discardableResult
+    public func keep(environment: [String: String]) throws -> URL {
+        let configuration = try NodConfiguration.fromEnvironment(environment)
+        guard case .bearer(let token) = configuration.credential else {
+            throw NodClientError.configuration("There is no NOD_AUTH_TOKEN in the environment to save.")
+        }
+        return try save(server: configuration.baseURL.absoluteString, token: .replace(token))
+    }
+
+    /// The address and token of the environment are the saved ones: starting without the environment connects alike.
+    public func keeps(environment: [String: String]) -> Bool {
+        guard let configuration = try? NodConfiguration.fromEnvironment(environment),
+              case .bearer(let token) = configuration.credential,
+              let server = try? Self.normalize(configuration.baseURL.absoluteString) else { return false }
+        return savedServer == server && self.token(for: server) == token
+    }
+
     /// An HTTP(S) origin from what the person typed: "localhost:4310" reads as http://localhost:4310, a trailing slash
     /// is dropped, and anything with a path, query, user or password is refused.
     nonisolated public static func normalize(_ text: String) throws -> URL {
