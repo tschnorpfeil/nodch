@@ -141,45 +141,38 @@ Deterministic, network-free checks are part of `swift run --package-path app
 NodchChecks`. A `URLProtocol` fixture covers SSE reconnects, event-triggered
 refreshes, coalescing, authentication failures, mutation bodies and no retries.
 
-## Latest acceptance output (2026-11-13)
+## Latest acceptance output (2026-11-16)
 
-`swift build --package-path app` exited 0:
-
-```text
-Build complete! (4,12 Sek.)
-```
-
-`swift run --package-path app NodchChecks` exited 0, including the new
-multipart framing, MIME fallback, bearer/cookie auth, Artifact mapping,
-attachmentIds, local file validation and upload error/no-retry assertions:
-
-```text
-ok   non-2xx upload is readable and never retried
-ok   upload network failure is never retried
-ok   invalid Artifact JSON has a typed error
-All checks passed.
-```
-
-`scripts/contract.sh` installed dependencies and started the real pinned Nod,
-then exited 1 at the new attachment persistence assertion:
+`swift build --package-path app` and `swift run --package-path app NodchChecks`
+exited 0 (`All checks passed.`). `scripts/contract.sh` exited 0 against the
+pinned, unmodified Nod:
 
 ```text
 PASS without credentials -> 401
 PASS with credentials -> 200
 PASS SSE connects and loads initial state
+PASS send prompt -> accepted
+PASS SSE + state -> IslandState.needsYou
+PASS approve -> accepted
+PASS duplicate approval -> 409 (no retry)
+PASS stop -> accepted, island settles (rest)
 PASS upload text file -> Artifact with id, name, MIME and size
 PASS send attachment without text -> accepted
 PASS GET state with uploaded attachment -> 200
-Contract failed: GET state -> sent message carries uploaded attachment
+PASS GET state -> sent message carries uploaded attachment
+PASS Nod pinned revision -> 915e4f1f0f5ee6e3af422bcc2814dc4c6a851cc1
+PASS Nod git status --porcelain -> clean
 ```
 
-This run does **not** establish attachment persistence or the later approval/stop
-assertions. Investigation stopped at the requested failure gate; the exact
-mismatching message field has not been diagnosed. No rerun was attempted.
-The fixture trap removed its containers and processes: a subsequent Docker
-container listing for `nodch-contract` and listener check for 14310/14311 were
-both empty. The cached Nod checkout remained clean.
-
-The command-line toolchain emitted linker search-path warnings; they did not
-prevent the build or deterministic checks from passing. UI rendering was not
-tested in this client-only task.
+Root cause of the 2026-11-13 failure: that run used a pre-merge draft of
+PR #2 (commit `a26210b`) whose client sent `clientMessageId` as Swift's
+uppercase `UUID().uuidString`. Nod uses that value as the message id
+(`src/server/thread.ts:718`) and returns it verbatim as `messageId`
+(`thread.ts:777`), but stores it in a `uuid` column (`src/server/db.ts:107`),
+so `GET /api/state` reports it lowercase and the contract's `id ==
+submission.messageId` lookup found no message. Nod did store the attachment.
+The merged client already lowercases the id (`NodClient.swift`, guarded by the
+checks "send uses a lowercase client message ID" and "client message ID is
+lowercase, as Nod returns it"). Re-running the contract with `.lowercased()`
+removed from `send` reproduced the failure: the response carried
+`BA302A44-…`, the state stored `ba302a44-…`.
