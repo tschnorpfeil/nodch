@@ -254,8 +254,8 @@ final class IslandController {
             model.showsPrompt = true
             model.perform(model.draft.open(cause == .hotkey ? .hotkey : .drop))
         case .click:
-            // At rest, right after an answer and on Nod's question the card is the prompt, with the answer above it.
-            model.showsPrompt = model.tone == .rest || model.tone == .done || model.asking != nil
+            // At rest, right after an answer, on Nod's question and after a failure the card is the prompt.
+            model.showsPrompt = IslandPresentation.clickOpensPrompt(model.tone, asking: model.asking != nil)
             if model.showsPrompt { model.perform(model.draft.open(.click)) }
         case .approval:
             // The person may be typing in the prompt they opened: the approval waits in the wing for them.
