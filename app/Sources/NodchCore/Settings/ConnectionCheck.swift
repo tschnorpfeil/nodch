@@ -44,6 +44,19 @@ public enum ConnectionCheck: Equatable, Sendable {
         }
     }
 
+    /// What Settings says after Save, once the saved connection was tried. Never contains the token.
+    public func savedMessage(address: URL) -> String {
+        if self == .connected { return "Saved. Connected to Nod at \(ConnectionCheck.display(address))." }
+        return "Saved, but it didn’t connect. " + message(address: address, inSettings: true)
+    }
+
+    /// Tries the connection just saved with `tester` (one GET /api/state, nothing retried or sent on anyone's behalf).
+    @MainActor public static func afterSave(_ configuration: NodConfiguration,
+                                 tester: (NodConfiguration) async -> ConnectionCheck) async -> (check: ConnectionCheck, message: String) {
+        let check = await tester(configuration)
+        return (check, check.savedMessage(address: configuration.baseURL))
+    }
+
     /// The address as people type it: without a trailing slash.
     public static func display(_ address: URL) -> String {
         let text = address.absoluteString

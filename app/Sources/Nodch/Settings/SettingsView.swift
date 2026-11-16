@@ -205,7 +205,14 @@ struct SettingsView: View {
         case .idle:
             if let saved = model.saved {
                 if saved.isEmpty {
-                    status("Saved. nodch reconnects now.", symbol: "checkmark.circle.fill", color: .green)
+                    switch model.savedCheck {
+                    case .done(let check, let address):
+                        status(check.savedMessage(address: address),
+                               symbol: check == .connected ? "checkmark.circle.fill" : "exclamationmark.triangle.fill",
+                               color: check == .connected ? .green : .red)
+                    case .checking, nil:
+                        HStack(spacing: 6) { ProgressView().controlSize(.small); Text("Saved. Trying the connection…").foregroundStyle(.secondary) }
+                    }
                 } else {
                     status(saved, symbol: "exclamationmark.triangle.fill", color: .red)
                 }

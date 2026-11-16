@@ -270,6 +270,20 @@ import NodchCore
 
         let descriptions = [NodClientError.credentials, .unauthorized, .network("x")].compactMap(\.errorDescription)
             + [ConnectionCheck.unauthorized, .missingCredentials, .unreachable, .hostNotPermitted].map { $0.message(address: address) }
+        // Save tries what it saved: a rejected token is said, a working connection is confirmed, and no token is shown.
+        let secret = "nodch-check-secret-\(UUID().uuidString)"
+        let saved = NodConfiguration(baseURL: URL(string: "https://mac.example.ts.net:4310")!, credential: .bearer(secret))
+        var tried: [NodConfiguration] = []
+        let rejectedAfterSave = await ConnectionCheck.afterSave(saved) { tried.append($0); return .unauthorized }
+        check(tried.count == 1 && rejectedAfterSave.check == .unauthorized && rejectedAfterSave.message.hasPrefix("Saved, but")
+              && rejectedAfterSave.message.contains("rejected") && !rejectedAfterSave.message.contains(secret),
+              "save check: a rejected token is said after Save, without the token")
+        let okAfterSave = await ConnectionCheck.afterSave(saved) { _ in .connected }
+        check(okAfterSave.message == "Saved. Connected to Nod at https://mac.example.ts.net:4310.",
+              "save check: a working connection is confirmed with its address")
+        let goneAfterSave = await ConnectionCheck.afterSave(saved) { _ in .unreachable }
+        check(goneAfterSave.message.contains("Nothing answers at https://mac.example.ts.net:4310"), "save check: unreachable names the address")
+
         check(!descriptions.contains { $0.contains("NOD_AUTH_TOKEN") || $0.contains("NOD_DATA_ROOT") || $0.contains("NOD_URL") },
               "errors: what the person reads names no nodch env var")
 
