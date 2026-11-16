@@ -28,6 +28,8 @@ import Observation
     var voiceLevel: Float = 0
     /// Files dragged toward or over the island.
     var dropZone = IslandDropZone.none
+    /// The card opened for files dragged toward the closed island: it shows one large drop target.
+    var dropTray = false
     /// An answer on its way: true for Approve, false for Decline.
     private(set) var answering: Bool?
     private(set) var stopping = false
@@ -89,9 +91,11 @@ import Observation
     var state: IslandState { store.state }
     var tone: IslandTone { IslandPresentation.tone(store.state, doneAge: doneExpired ? .infinity : 0, answerReady: answerReady) }
     var line: String { IslandPresentation.line(store.state, answerReady: answerReady) }
-    var wing: IslandWing? {
+    var wing: IslandWing? { wing(notch: layout.notch) }
+    /// The wing at a camera housing (`notch`) or below a menu bar.
+    func wing(notch: Bool) -> IslandWing? {
         if dropZone != .none, !isOpen { return IslandWing() }
-        return IslandPresentation.wing(store.state, tone: tone, hovering: hovering && !isOpen)
+        return IslandPresentation.wing(store.state, tone: tone, hovering: hovering && !isOpen, notch: notch)
     }
     /// The wing's words: while files are dragged toward the closed island, where they go.
     var wingLine: String {

@@ -176,11 +176,14 @@ public enum IslandPresentation {
         }
     }
 
-    /// What the compact shape carries; nil leaves the island at rest inside the housing (or gone below the menu bar).
-    /// `hovering`: the pointer is on the island.
-    public static func wing(_ state: IslandState, tone: IslandTone, hovering: Bool) -> IslandWing? {
+    /// What the compact shape carries; nil leaves the island gone below the menu bar. `hovering`: the pointer is on
+    /// the island. `notch`: at a camera housing the resting island keeps a small presence, the green "connected" dot
+    /// beside the housing, so nodch is visibly there without ⌥Space; below a menu bar it stays out of the way.
+    public static func wing(_ state: IslandState, tone: IslandTone, hovering: Bool, notch: Bool = true) -> IslandWing? {
         switch tone {
-        case .rest: return hovering ? IslandWing(showsLine: false, showsHint: true) : nil
+        case .rest:
+            if hovering { return IslandWing(showsLine: false, showsHint: true) }
+            return notch ? IslandWing(showsLine: false) : nil
         // Unobtrusive: just the sign; the words come on hover.
         case .offline: return IslandWing(showsLine: hovering)
         case .working: return IslandWing(showsElapsed: true, showsStop: true)
@@ -193,10 +196,12 @@ public enum IslandPresentation {
     }
 
     /// Why the card opens. Only a person's own click, shortcut or drop gives it the keyboard; an approval that arrives
-    /// while they type in another app shows without taking it.
-    public enum OpenCause: Equatable, Sendable { case click, hotkey, drop, approval }
+    /// while they type in another app shows without taking it. `dropTray`: files are dragged toward the closed island,
+    /// so it grows into one large target and folds away again when they leave or land elsewhere.
+    public enum OpenCause: Equatable, Sendable { case click, hotkey, drop, approval, dropTray }
 
-    public static func takesKey(_ cause: OpenCause) -> Bool { cause != .approval }
+    /// The drag belongs to another app until the files land: the tray never takes the keyboard from it.
+    public static func takesKey(_ cause: OpenCause) -> Bool { cause != .approval && cause != .dropTray }
 
     /// The shortcut brings the prompt, except while Nod is not connected: then it brings the card that says why,
     /// with Settings and Retry, and the microphone stays off.
@@ -276,13 +281,14 @@ public enum IslandPresentation {
 
     /// What a change of state does to the card. `open`: why the card is open now, nil when it is closed.
     /// - A new approval (or another one) reveals the card, without the keyboard, unless the person has it open already.
+    ///   The drop tray is not a card the person reads: an approval takes its place.
     /// - When the approval it opened for is gone, a card that opened by itself closes again.
     /// - A card left on a state that has nothing to show (rest) closes; one that shows an answer stays for reading.
     public static func reaction(from old: IslandState, to new: IslandState, open: OpenCause?) -> Reaction {
         let oldID = waitingID(old)
         if let newID = waitingID(new) {
             guard newID != oldID else { return .none }
-            return open == nil ? .reveal : .none
+            return open == nil || open == .dropTray ? .reveal : .none
         }
         if oldID != nil, open == .approval { return .conceal }
         if case .done = old { return .none }

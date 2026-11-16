@@ -11,7 +11,7 @@ nodch lives in the MacBook notch, or at the top of the screen on displays withou
 working on. It does a few things and hands everything else to Nod:
 
 - **Ask.** <kbd>⌥ Space</kbd> opens a prompt and starts listening. Speak, and your words appear as you say them; type,
-  and the microphone steps aside. Drop files on the island to send them along.
+  and the microphone steps aside. Drag files toward the notch and the island opens into a drop target for them.
 - **Follow.** While Nod works, the island shows the current step and a timer, with a Stop button.
 - **Read.** When Nod finishes while the island is closed, it says **Answer ready** until you open it. The answer
   shows in full, with its formatting, above the prompt, so you can follow up.
