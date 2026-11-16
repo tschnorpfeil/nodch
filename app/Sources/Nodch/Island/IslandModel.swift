@@ -322,7 +322,7 @@ import Observation
         perform(effects)
         let token = draft.sendToken
         let text = withWords ? draft.display.trimmingCharacters(in: .whitespacesAndNewlines) : ""
-        guard let actions = store.actions else { draft.sendFailed(Self.notConnected, token: token); return }
+        guard let actions = store.actions else { draft.sendFailed(Self.notConnected, token: token); announce(IslandPresentation.notSent(Self.notConnected)); return }
         Task {
             do {
                 try await actions.answer(question: asked, choices: choices, text: text)
@@ -334,7 +334,7 @@ import Observation
     }
 
     private func send(_ prompt: String, _ attachments: [NodAttachment]) {
-        guard let actions = store.actions else { draft.sendFailed(Self.notConnected); return }
+        guard let actions = store.actions else { draft.sendFailed(Self.notConnected); announce(IslandPresentation.notSent(Self.notConnected)); return }
         let token = draft.sendToken
         // Words typed under Nod's open question answer it, as Nod's own composer does; files go out as a new message.
         let asked = attachments.isEmpty ? asking : nil
