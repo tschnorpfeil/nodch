@@ -37,9 +37,9 @@ struct IslandCompactView: View {
     }
 
     private func accessibilityLabel(_ shown: IslandModel.Shown) -> String {
-        if shown.drop != .none { return "Drop files to attach them to a prompt" }
+        if shown.drop != .none { return "Drop files for Nod" }
         return switch shown.tone {
-        case .rest: "nodch. Open the quick prompt"
+        case .rest: "nodch. Ask Nod"
         case .needsYou: "Nod needs you: \(shown.line)"
         default: "Nod, \(IslandPresentation.heading(shown.tone).lowercased()): \(shown.line)"
         }

@@ -116,7 +116,7 @@ public enum IslandPresentation {
     public static func line(_ state: IslandState, answerReady: Bool = false) -> String {
         if answerReady, tone(state, answerReady: true) == .done { return answerReadyLine }
         switch state {
-        case .offline: return "Nod is offline"
+        case .offline: return "Nod isn’t connected"
         case .rest: return ""
         case .working(let activity):
             let parts = [activity.step, activity.site].compactMap(nonEmpty)
