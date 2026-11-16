@@ -13,6 +13,10 @@ All notable changes to nodch are documented here. The format follows
 - Settings › Open Nod in: Open Nod opens the Nod app for a Nod on this Mac and the browser for any other address,
   so it shows the Nod nodch talks to. Choose Nod app or Browser to always use one.
 - When Nod finishes a turn that ran 5 seconds or more, the island says how long it took (m:ss).
+- The prompt offers Start at login once, so nodch is back after a restart. It turns on only when you click Turn on.
+
+### Changed
+- One word for each thing: "Nod isn’t connected", "Drop files for Nod", "Open Nod", "Ask Nod".
 
 ### Fixed
 - Save in Settings tries the saved connection and says whether it worked, instead of only "Saved".
@@ -25,6 +29,8 @@ All notable changes to nodch are documented here. The format follows
 - A send that fails while the prompt is hidden still says why when you open it again, until the next send.
 - An approval that arrives while you type is one click away: "Show" in the prompt opens it, and its buttons wait
   out the usual moment before they take a click.
+- VoiceOver says when a message or file wasn't sent, and names the shortcut that opens a waiting approval or question.
+- The README's uninstall step names the real Keychain items, one per server.
 
 ## 0.2.0 — 2026-11-16
 

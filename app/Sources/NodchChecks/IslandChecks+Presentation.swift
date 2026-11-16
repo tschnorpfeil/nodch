@@ -80,6 +80,15 @@ extension IslandChecks {
         check(P.wing(.done(summary: "Sent"), tone: .done, hovering: false)?.showsTook == false && P.line(slow) == "Sent",
               "presentation: no duration leaves the done wing as it was")
 
+        // Start at login is offered once: off, never offered, connected; every other combination stays quiet.
+        check(P.offersLogin(notRegistered: true, offeredBefore: false, connected: true),
+              "presentation: the prompt offers Start at login when it is off, never offered and connected")
+        check(!P.offersLogin(notRegistered: false, offeredBefore: false, connected: true)
+              && !P.offersLogin(notRegistered: true, offeredBefore: true, connected: true)
+              && !P.offersLogin(notRegistered: true, offeredBefore: false, connected: false)
+              && !P.offersLogin(notRegistered: false, offeredBefore: true, connected: false),
+              "presentation: no login offer when already on, already offered or not connected")
+
         // Elapsed time.
         check(P.elapsed(7) == "0:07" && P.elapsed(725) == "12:05" && P.elapsed(3723) == "1:02:03" && P.elapsed(-3) == "0:00",
               "presentation: elapsed time reads m:ss and h:mm:ss")

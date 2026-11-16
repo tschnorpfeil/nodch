@@ -137,7 +137,7 @@ struct IslandDropTray: View {
                 .foregroundStyle(over ? IslandStyle.accent : IslandStyle.white(IslandStyle.secondary))
                 .symbolEffect(.bounce, value: reduceMotion ? false : over)
                 .padding(.bottom, 2)
-            Text("Drop here for Nod")
+            Text("Drop files for Nod")
                 .font(IslandStyle.title).foregroundStyle(IslandStyle.white(IslandStyle.primary))
             Text("They upload right away. Nothing is sent until Return.")
                 .font(IslandStyle.small).foregroundStyle(IslandStyle.white(IslandStyle.secondary))
@@ -151,7 +151,7 @@ struct IslandDropTray: View {
                                     style: StrokeStyle(lineWidth: over ? 1.5 : 1, dash: over ? [] : [5, 4])))
         .animation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.8), value: over)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(over ? "Release to attach the files for Nod" : "Drop here for Nod")
+        .accessibilityLabel(over ? "Release to attach the files for Nod" : "Drop files for Nod")
     }
 }
 
@@ -202,6 +202,7 @@ struct IslandPromptCard: View {
                 IslandChips(model: model, attachments: draft.attachments)
             }
             voiceStatus(draft)
+            if model.offersLogin, !draft.sending { loginOffer }
             footer(draft)
         }
         .animation(IslandStyle.fade, value: draft.error)
@@ -342,6 +343,21 @@ struct IslandPromptCard: View {
         }
     }
 
+    /// Shown once under the field: Start at login only turns on with a click on Turn on.
+    private var loginOffer: some View {
+        HStack(spacing: 10) {
+            Text("Start nodch at login?")
+                .font(IslandStyle.caption).foregroundStyle(IslandStyle.white(IslandStyle.secondary))
+            Button("Turn on") { model.turnOnLogin() }
+                .font(IslandStyle.caption.weight(.semibold)).foregroundStyle(IslandStyle.accent)
+                .accessibilityHint("Starts nodch when you log in")
+            Button("Not now") { model.answerLoginOffer() }
+                .font(IslandStyle.caption).foregroundStyle(IslandStyle.white(IslandStyle.secondary))
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .contain)
+    }
+
     @ViewBuilder private func footer(_ draft: PromptDraft) -> some View {
         if let error = draft.error {
             IslandErrorLine(text: error)
@@ -367,7 +383,7 @@ struct IslandPromptCard: View {
 
     private var statusLine: String {
         switch model.tone {
-        case .offline: "Nod is offline"
+        case .offline: "Nod isn’t connected"
         case .needsYou: "Waiting for you: \(model.line)"
         case .working: "Working: \(model.line)"
         default: model.line
@@ -755,7 +771,7 @@ struct IslandApprovalCard: View {
                             .fixedSize(horizontal: false, vertical: true)
                         Button { model.openNod() } label: {
                             HStack(spacing: 3) {
-                                Text("Open in Nod")
+                                Text("Open Nod for the full text")
                                 Image(systemName: "arrow.up.right").font(.system(size: 9, weight: .bold))
                             }
                             .font(IslandStyle.small.weight(.semibold)).foregroundStyle(IslandStyle.accent)
@@ -763,7 +779,7 @@ struct IslandApprovalCard: View {
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel("Open the full text in Nod")
+                        .accessibilityLabel("Open Nod for the full text")
                     }
                 }
             }

@@ -1,6 +1,7 @@
 // Adapted from Pippa: app/Sources/Pippa/App/IslandSnapshots.swift
 import AppKit
 import NodchCore
+import ServiceManagement
 
 /// `Nodch --snapshot <folder>`: renders the island in each state at a synthetic notch (a 185 × 32 pt housing) and as
 /// the pill below a menu bar, in front of a neutral desktop, at 2x. Uses the real views, geometry and wing measures
@@ -25,6 +26,8 @@ enum IslandSnapshots {
         var answerReady = false
         /// A session is starting and has not heard from Nod yet.
         var connecting = false
+        /// Start at login's status, when the scene has a login item (the offer shows for `.notRegistered`).
+        var login: SMAppService.Status?
     }
 
     static let scenes: [Scene] = [
@@ -55,6 +58,7 @@ enum IslandSnapshots {
         Scene(name: "failed", state: IslandSamples.failed),
         Scene(name: "failed-open", state: IslandSamples.failed, open: true),
         Scene(name: "prompt", state: .rest, open: true, prompt: PromptDraft()),
+        Scene(name: "prompt-login-offer", state: .rest, open: true, prompt: PromptDraft(), login: .notRegistered),
         Scene(name: "prompt-text", state: .rest, open: true, prompt: PromptDraft(text: "Summarise my unread mail from today")),
         Scene(name: "prompt-error", state: IslandSamples.working(), open: true, prompt: IslandSamples.failedSend),
         Scene(name: "prompt-after-failure", state: IslandSamples.failed, open: true, prompt: PromptDraft()),
@@ -118,6 +122,10 @@ enum IslandSnapshots {
         store.connecting = scene.connecting
         let model = IslandModel(store: store)
         model.picked = scene.picked
+        if let login = scene.login {
+            model.commands = AppCommands(loginItem: FixedLoginItem(login))
+            model.loginOffered = false
+        }
         model.hovering = scene.hovering
         model.isOpen = scene.open
         model.answerReady = scene.answerReady

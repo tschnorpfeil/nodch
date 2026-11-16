@@ -93,7 +93,8 @@ too.
 | "Nod isn’t connected" | Fix what the card says, then **Retry**. |
 
 To uninstall, quit nodch, turn off Start at login and delete the app. To remove its settings too:
-`defaults delete dev.nodch.Nodch`, and delete the "nodch: Nod token" item in Keychain Access.
+`defaults delete dev.nodch.Nodch`, and delete every "nodch: Nod token (…)" item in Keychain Access (one per saved server),
+or run `security delete-generic-password -s dev.nodch.Nodch` once per saved server.
 
 ## Build from source
 

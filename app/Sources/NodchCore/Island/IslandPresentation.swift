@@ -94,13 +94,29 @@ public enum IslandPresentation {
         [.working, .needsYou, .failed].contains(tone(state))
     }
 
+    /// The UserDefaults key that remembers the login offer was shown and answered, either way.
+    public static let loginOfferedKey = "nodch.loginOffered"
+
+    /// Start at login is offered once, in the prompt: only while it is off, never offered before and Nod is reachable
+    /// (so the first thing the person sees is nodch working, not a question). Nothing turns on without a click.
+    public static func offersLogin(notRegistered: Bool, offeredBefore: Bool, connected: Bool) -> Bool {
+        notRegistered && !offeredBefore && connected
+    }
+
     /// What VoiceOver hears when the island changes by itself; nil when nothing new needs the person.
-    public static func announcement(from old: IslandState, to new: IslandState, answerArrived: Bool) -> String? {
+    /// `shortcut` is the display string of the global shortcut in effect (nil: none), so a person who cannot see the
+    /// island hears how to reach the card that waits for them.
+    public static func announcement(from old: IslandState, to new: IslandState, answerArrived: Bool, shortcut: String? = nil) -> String? {
         if answerArrived { return "Nod’s answer is ready" }
+        // Without a shortcut the words stay as they were; with one, a sentence names it.
+        func withWay(_ text: String) -> String {
+            guard let shortcut = nonEmpty(shortcut) else { return text }
+            return text + (".?!".contains(text.last ?? " ") ? "" : ".") + " Press \(shortcut) to open it."
+        }
         if waitingID(new) != waitingID(old) {
             switch new {
-            case .needsYou(let approval, _): return "Nod needs you: " + (nonEmpty(approval.title) ?? "an approval")
-            case .asks: return "Nod has a question"
+            case .needsYou(let approval, _): return withWay("Nod needs you: " + (nonEmpty(approval.title) ?? "an approval"))
+            case .asks: return withWay("Nod has a question")
             default: break
             }
         }
@@ -111,12 +127,15 @@ public enum IslandPresentation {
         return nil
     }
 
+    /// What VoiceOver hears when a send or an upload fails: the card keeps the text and shows the reason, silently.
+    public static func notSent(_ reason: String) -> String { "Not sent: " + (nonEmpty(reason) ?? "something went wrong") }
+
     /// The wing's line: the step and site while Nod works (the title when there is no step), the approval's title,
     /// the summary or the error.
     public static func line(_ state: IslandState, answerReady: Bool = false) -> String {
         if answerReady, tone(state, answerReady: true) == .done { return answerReadyLine }
         switch state {
-        case .offline: return "Nod is offline"
+        case .offline: return "Nod isn’t connected"
         case .rest: return ""
         case .working(let activity):
             let parts = [activity.step, activity.site].compactMap(nonEmpty)

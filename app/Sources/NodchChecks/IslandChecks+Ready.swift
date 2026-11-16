@@ -30,5 +30,15 @@ extension IslandChecks {
               && P.announcement(from: working, to: .failed(message: "Timed out"), answerArrived: false) == "Nod couldn’t finish: Timed out"
               && P.announcement(from: .rest, to: working, answerArrived: false) == nil,
               "ready: VoiceOver hears an answer, a failure, an approval or a question, nothing else")
+        let waiting = IslandState.needsYou(approval("w", title: "Send this email?"), more: 0)
+        let question = IslandState.asks(NodAnswer(id: "q9", text: "When?", at: now))
+        check(P.announcement(from: working, to: waiting, answerArrived: false, shortcut: "⌥Space") == "Nod needs you: Send this email? Press ⌥Space to open it."
+              && P.announcement(from: working, to: question, answerArrived: false, shortcut: "⌥Space") == "Nod has a question. Press ⌥Space to open it."
+              && P.announcement(from: working, to: waiting, answerArrived: false, shortcut: nil) == "Nod needs you: Send this email?"
+              && P.announcement(from: working, to: question, answerArrived: false, shortcut: " ") == "Nod has a question",
+              "announcements: an approval or question names the shortcut that opens it; no shortcut, no suffix")
+        check(P.notSent("Nothing answers at http://localhost:4310.") == "Not sent: Nothing answers at http://localhost:4310."
+              && P.notSent(" ") == "Not sent: something went wrong",
+              "announcements: a failed send or upload says Not sent and why")
     }
 }

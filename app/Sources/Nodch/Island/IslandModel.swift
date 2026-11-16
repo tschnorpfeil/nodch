@@ -47,6 +47,9 @@ import Observation
     /// The wing's content. It stays while the wing shrinks back to rest, so the words do not vanish mid-motion.
     var shown = Shown()
     var hotkey: String? = HotkeySpec.standard.display
+    /// The one-time "Start nodch at login?" row in the prompt was answered (`IslandPresentation.loginOfferedKey`).
+    var loginOffered = UserDefaults.standard.bool(forKey: IslandPresentation.loginOfferedKey)
+    @ObservationIgnored var defaults: UserDefaults = .standard
     /// The dictation language picked from the microphone's menu; nil follows the system.
     var speechChoice: String? = SpeechLanguage.choice(UserDefaults.standard.string(forKey: SpeechLanguage.defaultsKey))
     /// What the microphone listens in right now (BCP 47), for the placeholder.
@@ -116,14 +119,18 @@ import Observation
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(answer.text, forType: .string)
         answerCopied = true
-        NSAccessibility.post(element: NSApp as Any, notification: .announcementRequested,
-                             userInfo: [.announcement: IslandPresentation.answerCopied,
-                                        .priority: NSAccessibilityPriorityLevel.high.rawValue])
+        announce(IslandPresentation.answerCopied)
         copiedTask?.cancel()
         copiedTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(1.5))
             if !Task.isCancelled { self?.answerCopied = false }
         }
+    }
+
+    /// Says `text` to VoiceOver now.
+    func announce(_ text: String) {
+        NSAccessibility.post(element: NSApp as Any, notification: .announcementRequested,
+                             userInfo: [.announcement: text, .priority: NSAccessibilityPriorityLevel.high.rawValue])
     }
 
     /// What the open card offers to the keyboard (`IslandPresentation.keyAction`).
@@ -265,10 +272,11 @@ import Observation
     }
 
     private func upload(_ id: Int, _ file: URL) {
-        guard let actions = store.actions else { draft.uploadFailed(id, reason: Self.notConnected); PromiseDrops.discard(file); return }
+        guard let actions = store.actions else { draft.uploadFailed(id, reason: Self.notConnected); announce(IslandPresentation.notSent(Self.notConnected)); PromiseDrops.discard(file); return }
         Task {
             do { draft.uploaded(id, as: try await actions.upload(file: file)) } catch {
                 draft.uploadFailed(id, reason: Self.describe(error))
+                announce(IslandPresentation.notSent(Self.describe(error)))
             }
             // A copy nodch received from Mail or Photos is not needed once it is on Nod (or failed to get there).
             PromiseDrops.discard(file)
@@ -314,7 +322,7 @@ import Observation
         perform(effects)
         let token = draft.sendToken
         let text = withWords ? draft.display.trimmingCharacters(in: .whitespacesAndNewlines) : ""
-        guard let actions = store.actions else { draft.sendFailed(Self.notConnected, token: token); return }
+        guard let actions = store.actions else { draft.sendFailed(Self.notConnected, token: token); announce(IslandPresentation.notSent(Self.notConnected)); return }
         Task {
             do {
                 try await actions.answer(question: asked, choices: choices, text: text)
@@ -326,7 +334,7 @@ import Observation
     }
 
     private func send(_ prompt: String, _ attachments: [NodAttachment]) {
-        guard let actions = store.actions else { draft.sendFailed(Self.notConnected); return }
+        guard let actions = store.actions else { draft.sendFailed(Self.notConnected); announce(IslandPresentation.notSent(Self.notConnected)); return }
         let token = draft.sendToken
         // Words typed under Nod's open question answer it, as Nod's own composer does; files go out as a new message.
         let asked = attachments.isEmpty ? asking : nil
@@ -364,7 +372,27 @@ import Observation
         let newQuestion = asking.map { $0.id != questionID } ?? false
         let prefix = newQuestion ? (questionID == nil ? "Couldn’t send the previous message: " : "Couldn’t send the previous answer: ") : ""
         draft.sendFailed(prefix + Self.describe(error), token: token)
+        announce(IslandPresentation.notSent(prefix + Self.describe(error)))
         if isOpen, showsPrompt { focusToken += 1 }
+    }
+
+    /// The prompt offers Start at login: not registered, never offered, and Nod is reachable.
+    var offersLogin: Bool {
+        IslandPresentation.offersLogin(notRegistered: commands.loginStatus == .notRegistered, offeredBefore: loginOffered,
+                                       connected: tone != .offline)
+    }
+
+    /// "Turn on" in the login offer: one explicit click. A refusal, or an approval macOS still wants, opens Settings
+    /// to explain it, like the right-click menu does.
+    func turnOnLogin() {
+        answerLoginOffer()
+        if commands.setStartsAtLogin(true) != nil || commands.loginStatus == .requiresApproval { commands.openSettings() }
+    }
+
+    /// "Not now" in the login offer: remembered, nothing registered.
+    func answerLoginOffer() {
+        loginOffered = true
+        defaults.set(true, forKey: IslandPresentation.loginOfferedKey)
     }
 
     /// "Open Nod" from a button, a link or ⌘Return. Without a connection the card stays and says why.
