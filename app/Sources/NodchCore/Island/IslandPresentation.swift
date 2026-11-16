@@ -94,6 +94,15 @@ public enum IslandPresentation {
         [.working, .needsYou, .failed].contains(tone(state))
     }
 
+    /// The UserDefaults key that remembers the login offer was shown and answered, either way.
+    public static let loginOfferedKey = "nodch.loginOffered"
+
+    /// Start at login is offered once, in the prompt: only while it is off, never offered before and Nod is reachable
+    /// (so the first thing the person sees is nodch working, not a question). Nothing turns on without a click.
+    public static func offersLogin(notRegistered: Bool, offeredBefore: Bool, connected: Bool) -> Bool {
+        notRegistered && !offeredBefore && connected
+    }
+
     /// What VoiceOver hears when the island changes by itself; nil when nothing new needs the person.
     public static func announcement(from old: IslandState, to new: IslandState, answerArrived: Bool) -> String? {
         if answerArrived { return "Nod’s answer is ready" }

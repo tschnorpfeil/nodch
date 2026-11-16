@@ -47,6 +47,9 @@ import Observation
     /// The wing's content. It stays while the wing shrinks back to rest, so the words do not vanish mid-motion.
     var shown = Shown()
     var hotkey: String? = HotkeySpec.standard.display
+    /// The one-time "Start nodch at login?" row in the prompt was answered (`IslandPresentation.loginOfferedKey`).
+    var loginOffered = UserDefaults.standard.bool(forKey: IslandPresentation.loginOfferedKey)
+    @ObservationIgnored var defaults: UserDefaults = .standard
     /// The dictation language picked from the microphone's menu; nil follows the system.
     var speechChoice: String? = SpeechLanguage.choice(UserDefaults.standard.string(forKey: SpeechLanguage.defaultsKey))
     /// What the microphone listens in right now (BCP 47), for the placeholder.
@@ -365,6 +368,25 @@ import Observation
         let prefix = newQuestion ? (questionID == nil ? "Couldn’t send the previous message: " : "Couldn’t send the previous answer: ") : ""
         draft.sendFailed(prefix + Self.describe(error), token: token)
         if isOpen, showsPrompt { focusToken += 1 }
+    }
+
+    /// The prompt offers Start at login: not registered, never offered, and Nod is reachable.
+    var offersLogin: Bool {
+        IslandPresentation.offersLogin(notRegistered: commands.loginStatus == .notRegistered, offeredBefore: loginOffered,
+                                       connected: tone != .offline)
+    }
+
+    /// "Turn on" in the login offer: one explicit click. A refusal, or an approval macOS still wants, opens Settings
+    /// to explain it, like the right-click menu does.
+    func turnOnLogin() {
+        answerLoginOffer()
+        if commands.setStartsAtLogin(true) != nil || commands.loginStatus == .requiresApproval { commands.openSettings() }
+    }
+
+    /// "Not now" in the login offer: remembered, nothing registered.
+    func answerLoginOffer() {
+        loginOffered = true
+        defaults.set(true, forKey: IslandPresentation.loginOfferedKey)
     }
 
     /// "Open Nod" from a button, a link or ⌘Return. Without a connection the card stays and says why.

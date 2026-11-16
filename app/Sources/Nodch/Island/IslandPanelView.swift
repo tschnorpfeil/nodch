@@ -202,6 +202,7 @@ struct IslandPromptCard: View {
                 IslandChips(model: model, attachments: draft.attachments)
             }
             voiceStatus(draft)
+            if model.offersLogin, !draft.sending { loginOffer }
             footer(draft)
         }
         .animation(IslandStyle.fade, value: draft.error)
@@ -340,6 +341,21 @@ struct IslandPromptCard: View {
             .font(IslandStyle.caption).foregroundStyle(IslandStyle.white(IslandStyle.secondary))
             .accessibilityElement(children: .combine)
         }
+    }
+
+    /// Shown once under the field: Start at login only turns on with a click on Turn on.
+    private var loginOffer: some View {
+        HStack(spacing: 10) {
+            Text("Start nodch at login?")
+                .font(IslandStyle.caption).foregroundStyle(IslandStyle.white(IslandStyle.secondary))
+            Button("Turn on") { model.turnOnLogin() }
+                .font(IslandStyle.caption.weight(.semibold)).foregroundStyle(IslandStyle.accent)
+                .accessibilityHint("Starts nodch when you log in")
+            Button("Not now") { model.answerLoginOffer() }
+                .font(IslandStyle.caption).foregroundStyle(IslandStyle.white(IslandStyle.secondary))
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .contain)
     }
 
     @ViewBuilder private func footer(_ draft: PromptDraft) -> some View {
