@@ -37,7 +37,9 @@ struct IslandPanelView: View {
             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { onHeight($0) }
         }
         // The tray lights up by itself; any other open card lights up as a whole.
-        .overlay { if model.dropZone == .over, !model.dropTray { dropHighlight(layout) } }
+        .overlay {
+            if model.dropZone == .over, !model.dropTray, model.dropDestination.uploads { dropHighlight(layout) }
+        }
         .animation(IslandStyle.fade, value: model.dropZone)
         .frame(maxHeight: .infinity, alignment: .top)
         .fontDesign(.rounded)

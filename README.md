@@ -17,9 +17,10 @@ working on. It does a few things and hands everything else to Nod:
   shows in full, with its formatting, above the prompt, so you can follow up.
 - **Answer.** When Nod asks you something, its choices are buttons and the keyboard is already in nodch: pick with
   the arrow keys or type your own answer.
-- **Approve.** When Nod wants to act, for example send an email, you see the full action and decide. Nothing is
-  approved for you.
-- **Go deeper.** <kbd>⌘ Return</kbd> brings the Nod app to the front for the whole conversation.
+- **Approve.** When Nod wants to act, you can review the action and decide. If Nod shortens the preview, use
+  **Review in Nod** to read the full action and approve it there.
+- **Go deeper.** <kbd>⌘ Return</kbd> opens your connected Nod in the browser when the card shows work, a decision
+  or a result. A task card opens **Scheduled**. A question, approval or answer opens **Chat**.
 
 nodch has no chat of its own. It talks to your running Nod over Nod's HTTP API.
 
@@ -51,11 +52,11 @@ Right-click the island for **Settings…**, **Start at login** and **Quit nodch*
 | <kbd>Return</kbd> | prompt | Send |
 | <kbd>Esc</kbd> | prompt | Discard and close |
 | <kbd>↑</kbd> <kbd>↓</kbd>, <kbd>Return</kbd> | Nod's question | Move between choices, pick one |
-| <kbd>⌥ Return</kbd> | approval / question | Approve, or send the ticked choices |
+| <kbd>⌥ Return</kbd> | full approval / question | Approve, or send the ticked choices |
 | <kbd>⌥ ⌫</kbd> | approval | Decline |
 | <kbd>⌘ .</kbd> | while Nod works | Stop the displayed task, or stop all work when nodch shows the main conversation |
 | <kbd>⇧ ⌘ C</kbd> | under an answer | Copy the whole answer (or right-click it) |
-| <kbd>⌘ Return</kbd> | any card | Open the Nod app |
+| <kbd>⌘ Return</kbd> | any card | Open Nod, or review a shortened approval in Nod |
 | <kbd>⌘ ,</kbd> / <kbd>⌘ Q</kbd> | any card | Settings / Quit |
 
 Plain <kbd>Return</kbd> never approves. A card that appears by itself ignores clicks and keys for a moment, so a
@@ -74,10 +75,11 @@ too.
 ## Privacy
 
 - nodch talks only to the Nod address you set. It has no telemetry and no other servers.
-- **Open Nod** (and <kbd>⌘ Return</kbd>) opens the Nod app for a Nod on this Mac and your browser for any other
-  address, because the Nod app keeps its own server setting. Settings › Open Nod in changes that.
+- A general **Open Nod** follows **Settings › Open Nod in**. Automatic opens the Nod app for a Nod on this Mac and
+  the browser otherwise. Opening work, a decision or a result uses the connected server in the browser, since the
+  Nod app keeps its own server setting.
 - The token is kept in your login Keychain; the address in nodch's preferences.
-- A file you drop is uploaded to your Nod right away, before you press Return.
+- The drop tray shows the destination host and port. A file you drop uploads to that Nod right away, before you press Return.
 - See [SECURITY.md](SECURITY.md) for details and how to report a problem.
 
 ## Troubleshooting

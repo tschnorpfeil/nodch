@@ -124,7 +124,7 @@ struct SettingsView: View {
                 ForEach(OpenTarget.allCases, id: \.self) { Text($0.title).tag($0) }
             }
         } footer: {
-            Text("Automatic opens the Nod app for a Nod on this Mac and the browser otherwise.")
+            Text("For a general launch, Automatic opens the Nod app for a Nod on this Mac and the browser otherwise. Opening a task, decision or result uses your connected Nod in the browser.")
                 .font(.caption).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }

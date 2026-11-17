@@ -343,11 +343,11 @@ public enum IslandPresentation {
 
     /// The approval card's quiet key line. A shortened approval has no approve key: ⌘↩ reviews it in Nod.
     public static func approvalHints(approvable: Bool = true) -> String {
-        approvable ? "⌥↩ approve  ·  ⌥⌫ decline  ·  esc close" : "⌘↩ review in Nod  ·  ⌥⌫ decline  ·  esc close"
+        approvable ? "⌥↩ approve  ·  ⌥⌫ decline  ·  esc close" : "⌥⌫ decline  ·  esc close"
     }
 
     /// What the shortened approval's notice says: the preview is not all of it, and approving happens in Nod.
-    public static let shortenedNotice = "Nod shortened this text. Review the full text in Nod and approve it there."
+    public static let shortenedNotice = "Nod shortened this preview. Review the full text before approving."
     public static let reviewInNod = "Review in Nod"
     /// Shown when Approve is asked for a shortened approval anyway (a stray call, never a button).
     public static let cannotApproveShortened = "Nod shortened this text. Review it in Nod to approve it."

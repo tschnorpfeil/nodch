@@ -58,9 +58,9 @@ extension IslandChecks {
               && P.keyAction(.returnKey, .option, offers: .init(approval: false, approvable: false, picks: true)) == .sendPicks,
               "approval: the default offers keep approving, and picks are untouched")
         check(P.approvalHints(approvable: true).contains("⌥↩ approve") && !P.approvalHints(approvable: false).contains("approve")
-              && P.approvalHints(approvable: false).contains("⌘↩ review in Nod") && P.approvalHints(approvable: false).contains("⌥⌫ decline")
+              && !P.approvalHints(approvable: false).contains("⌘↩") && P.approvalHints(approvable: false).contains("⌥⌫ decline")
               && P.approvalHints(approvable: false).contains("esc close"),
-              "approval: the key line names review, not approve, for a shortened approval")
+              "approval: the shortened card's footer names Decline and Escape; Review has its own shortcut hint")
         check(P.shortenedNotice.contains("Review") && !P.shortenedNotice.contains("Open Nod") && P.reviewInNod == "Review in Nod",
               "approval: one Review in Nod action, no second Open Nod wording")
 
