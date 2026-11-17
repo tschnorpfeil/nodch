@@ -445,8 +445,7 @@ final class IslandPresenter: NSObject {
                let editor = self.panel.firstResponder as? NSTextView, editor.isFieldEditor, !editor.hasMarkedText(),
                event.modifierFlags.intersection([.command, .control, .option, .shift]).isEmpty,
                MainActor.assumeIsolated({
-                   if event.isARepeat, (event.keyCode == 36 || event.keyCode == 76),
-                      self.view.model.asking != nil, self.view.model.highlightedChoice != nil { return true }
+                   if event.isARepeat, event.keyCode == 36 || event.keyCode == 76 { return true }
                    return self.onQuestionKey?(event.keyCode) ?? false
                }) {
                 return nil

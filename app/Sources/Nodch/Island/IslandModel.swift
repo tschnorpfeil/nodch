@@ -226,10 +226,11 @@ import Observation
     /// The question (or new message) and the Nod that Return meant are taken now: a send that waits for dictation
     /// goes out only if the card still shows them (`send`).
     func submitPrompt() {
-        guard IslandPresentation.acceptsTypedSubmit(question: asking != nil, draft: draft,
+        guard draft.acceptsSubmit,
+              IslandPresentation.acceptsTypedSubmit(question: asking != nil, draft: draft,
                                                     shownFor: Date().timeIntervalSince(approvalShownAt)) else { return }
         submittedTo = store.actions
-        perform(draft.submit(to: .current(question: asking?.id, files: !draft.ready.isEmpty)))
+        perform(draft.submit(to: .current(question: asking?.id, files: draft.ready)))
     }
     /// The Nod session that was connected when Return was pressed.
     @ObservationIgnored private weak var submittedTo: NodActions?
@@ -352,7 +353,7 @@ import Observation
         // Return was meant for what the card showed then. A question that changed, appeared or went while the words
         // were finalized, or another Nod, calls the send off; the words and files stay for the person to check.
         let changed = intended !== actions ? IslandPresentation.serverChanged
-            : target != .current(question: asking?.id, files: !attachments.isEmpty) ? IslandPresentation.targetChanged : nil
+            : target != .current(question: asking?.id, files: attachments) ? IslandPresentation.targetChanged : nil
         if let changed {
             draft.sendFailed(changed, token: token)
             announce(IslandPresentation.notSent(changed))

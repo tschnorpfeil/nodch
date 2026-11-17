@@ -28,16 +28,20 @@ extension IslandChecks {
         dictated.voiceStarted()
         dictated.heard("next week", final: false)
         check(dictated.submit(to: .question("q1")) == [.stopVoice(finalize: true)], "targets: Return while listening waits for the last words")
+        check(!dictated.acceptsSubmit && dictated.submit(to: .message).isEmpty,
+              "targets: another Return cannot replace the pending submission")
         let late = dictated.voiceFinished()
         check(late == [.send(prompt: "next week", attachments: [], target: .question("q1"))] && dictated.sending,
               "targets: the late send names the question Return was pressed on")
         // The model sends only if the card still shows that target; otherwise it calls the send off, words kept.
-        check(PromptTarget.current(question: "q1", files: false) == .question("q1"), "targets: the same question still matches")
+        check(PromptTarget.current(question: "q1", files: []) == .question("q1"), "targets: the same question still matches")
         for (now, name) in [("q2", "Q1→Q2"), (nil, "Q1→gone")] as [(String?, String)] {
-            check(PromptTarget.current(question: now, files: false) != .question("q1"), "targets: \(name) no longer matches")
+            check(PromptTarget.current(question: now, files: []) != .question("q1"), "targets: \(name) no longer matches")
         }
-        check(PromptTarget.current(question: "q1", files: false) != .message, "targets: prompt→question no longer matches")
-        check(PromptTarget.current(question: "q1", files: true) == .message, "targets: files go out as a new message")
+        check(PromptTarget.current(question: "q1", files: []) != .message, "targets: prompt→question no longer matches")
+        let originalFile = NodAttachment(id: "original", name: "original.pdf", mimeType: "application/pdf", size: 1)
+        check(PromptTarget.current(question: "q1", files: [originalFile]) == .messageWithFiles(["original"]),
+              "targets: files go out as a new message with the captured ids")
         dictated.sendFailed(P.targetChanged, token: dictated.sendToken)
         check(!dictated.sending && dictated.text == "next week" && dictated.error == P.targetChanged,
               "targets: a called-off send keeps the original words and says why")
@@ -55,6 +59,10 @@ extension IslandChecks {
         withLateFile.uploaded(1, as: lateFile)
         check(withLateFile.voiceFinished() == [.send(prompt: "next week", attachments: [lateFile], target: .question("q1"))],
               "targets: a late file cannot change the captured question into a new message")
+
+        check(PromptTarget.current(question: "q2", files: [lateFile]) != .message &&
+              PromptTarget.current(question: nil, files: [lateFile]) != .messageWithFiles(["original"]),
+              "targets: a late file changes the target even when both sends would be new messages")
 
         // A Return that never went out leaves no target behind.
         var edited = PromptDraft()

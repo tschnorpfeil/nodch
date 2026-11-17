@@ -62,12 +62,13 @@ public struct PromptAttachment: Equatable, Sendable, Identifiable {
 /// new message. Taken when Return is pressed, so a send that waits for dictation still knows what the person meant.
 public enum PromptTarget: Equatable, Sendable {
     case message
+    case messageWithFiles([String])
     case question(String)
 
-    /// The target on screen now: the open question's id, if any, unless files go with the words.
-    public static func current(question: String?, files: Bool) -> PromptTarget {
-        guard !files, let question else { return .message }
-        return .question(question)
+    /// Files go with a new message. The ids also keep a file added or removed later from changing this send.
+    public static func current(question: String?, files: [NodAttachment]) -> PromptTarget {
+        if !files.isEmpty { return .messageWithFiles(files.map(\.id)) }
+        return question.map(PromptTarget.question) ?? .message
     }
 }
 
@@ -250,11 +251,14 @@ public struct PromptDraft: Equatable, Sendable {
 
     // MARK: Sending
 
+    /// A Return already waiting for dictation or for Nod keeps its original target.
+    public var acceptsSubmit: Bool { !sending && sendAfterFinish == nil }
+
     /// Return. While the microphone is on it goes off first and the prompt goes out once the last words are in
     /// (`voiceFinished`). Never more than one send for one Return; nothing while an upload is still running or a
     /// file has failed. `target`: what the card offered when Return was pressed (`PromptTarget.current`).
     public mutating func submit(to target: PromptTarget = .message) -> [PromptEffect] {
-        guard !sending else { return [] }
+        guard acceptsSubmit else { return [] }
         if failedFiles > 0 { notice = Self.removeFailedFirst; return [] }
         if uploading { notice = Self.waitsForUploads; return [] }
         if voice == .finishing { sendAfterFinish = target; return [] }
