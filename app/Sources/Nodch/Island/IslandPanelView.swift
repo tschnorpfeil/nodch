@@ -684,6 +684,7 @@ struct IslandStatusCard: View {
     private var working: some View {
         let activity = model.activity
         let card = activity.map(IslandPresentation.workingCard) ?? (title: "Working…", step: nil)
+        let scope = activity?.stopScope ?? .thread
         return VStack(alignment: .leading, spacing: IslandStyle.gap) {
             Text(card.title)
                 .font(IslandStyle.title).foregroundStyle(IslandStyle.white(IslandStyle.primary))
@@ -713,13 +714,13 @@ struct IslandStatusCard: View {
                         if model.stopping { ProgressView().controlSize(.mini) } else {
                             RoundedRectangle(cornerRadius: 1.5).frame(width: 8, height: 8)
                         }
-                        Text("Stop")
+                        Text(IslandPresentation.stopName(scope, short: true))
                     }
                 }
                 .buttonStyle(IslandButtonStyle())
-                .disabled(model.stopping)
-                .help("Stop (⌘.)")
-                .accessibilityLabel("Stop Nod")
+                .disabled(model.stopping || activity == nil)
+                .help("\(IslandPresentation.stopName(scope)) (⌘.)")
+                .accessibilityLabel(IslandPresentation.stopName(scope))
                 .accessibilityHint("Command-Period")
             }
         }

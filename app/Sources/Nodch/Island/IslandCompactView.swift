@@ -256,6 +256,8 @@ struct IslandStopButton: View {
     var model: IslandModel
 
     var body: some View {
+        // The task on show, or all of the thread's work; nothing once the activity is gone and the wing shrinks.
+        let scope = model.activity?.stopScope ?? .thread
         Button { model.stop() } label: {
             ZStack {
                 Circle().fill(IslandStyle.white(0.16))
@@ -269,9 +271,9 @@ struct IslandStopButton: View {
             .contentShape(Circle())
         }
         .buttonStyle(.plain)
-        .disabled(model.stopping)
-        .help("Stop Nod")
-        .accessibilityLabel("Stop Nod")
+        .disabled(model.stopping || model.activity == nil)
+        .help(IslandPresentation.stopName(scope))
+        .accessibilityLabel(IslandPresentation.stopName(scope))
     }
 }
 

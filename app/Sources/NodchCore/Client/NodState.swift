@@ -90,7 +90,8 @@ public struct NodStateMapper: Sendable {
             doneUntil = nil
             return .working(WorkActivity(title: activity.title, step: activity.step ?? activity.tool, site: activity.site,
                                          since: Self.date(activity.since) ?? now,
-                                         doing: WorkActivity.Doing(rawValue: activity.doing) ?? .model))
+                                         doing: WorkActivity.Doing(rawValue: activity.doing) ?? .model,
+                                         taskID: activity.taskId))
         }
         let latest = state.turns.max { $0.createdAt < $1.createdAt }
         if let running = state.turns.first(where: { $0.status == "running" || $0.status == "queued" }) {

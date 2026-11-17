@@ -58,13 +58,27 @@ public struct PromptAttachment: Equatable, Sendable, Identifiable {
     public init(id: Int, file: URL, status: Status) { self.id = id; self.file = file; self.status = status }
 }
 
+/// Where Return sends the words: Nod's open question (its message id), or a new message. Files always go out as a
+/// new message. Taken when Return is pressed, so a send that waits for dictation still knows what the person meant.
+public enum PromptTarget: Equatable, Sendable {
+    case message
+    case question(String)
+
+    /// The target on screen now: the open question's id, if any, unless files go with the words.
+    public static func current(question: String?, files: Bool) -> PromptTarget {
+        guard !files, let question else { return .message }
+        return .question(question)
+    }
+}
+
 public enum PromptEffect: Equatable, Sendable {
     case startVoice
     /// Off with the microphone. `finalize`: the transcriber still turns the audio it has into final words and then
     /// reports `voiceFinished()`; otherwise whatever it still hears is dropped.
     case stopVoice(finalize: Bool)
     case upload(id: Int, file: URL)
-    case send(prompt: String, attachments: [NodAttachment])
+    /// `target`: where Return meant the words to go. The app sends only if that is still what the card shows.
+    case send(prompt: String, attachments: [NodAttachment], target: PromptTarget = .message)
 }
 
 public struct PromptDraft: Equatable, Sendable {
@@ -88,7 +102,8 @@ public struct PromptDraft: Equatable, Sendable {
     /// Names the send that is out. A discarded draft's send that finishes late carries an older token and is ignored.
     public private(set) var sendToken = 0
     public private(set) var voiceReady = false
-    private var sendAfterFinish = false
+    /// Return was pressed while the last words were still coming: send to this target once they are in.
+    private var sendAfterFinish: PromptTarget?
     private var noSpeech = false
     private var heardSpeech = false
     private var nextID = 1
@@ -132,6 +147,7 @@ public struct PromptDraft: Equatable, Sendable {
         let effects: [PromptEffect] = voice.isActive || voice == .finishing ? [.stopVoice(finalize: false)] : []
         keepVolatile()
         voice = .off
+        sendAfterFinish = nil
         notice = nil
         return effects
     }
@@ -165,7 +181,7 @@ public struct PromptDraft: Equatable, Sendable {
     public mutating func finishVoice(noSpeech: Bool = false) -> [PromptEffect] {
         guard voice.isActive else { return [] }
         self.noSpeech = noSpeech
-        sendAfterFinish = false
+        sendAfterFinish = nil
         voice = .finishing
         return [.stopVoice(finalize: true)]
     }
@@ -221,7 +237,7 @@ public struct PromptDraft: Equatable, Sendable {
         if takingOver {
             voice = .off
             voiceReady = false
-            sendAfterFinish = false
+            sendAfterFinish = nil
             text = Self.takeOver(display, fieldHad: fieldText ?? display, edited: value)
             volatile = ""
             return effects
@@ -236,19 +252,19 @@ public struct PromptDraft: Equatable, Sendable {
 
     /// Return. While the microphone is on it goes off first and the prompt goes out once the last words are in
     /// (`voiceFinished`). Never more than one send for one Return; nothing while an upload is still running or a
-    /// file has failed.
-    public mutating func submit() -> [PromptEffect] {
+    /// file has failed. `target`: what the card offered when Return was pressed (`PromptTarget.current`).
+    public mutating func submit(to target: PromptTarget = .message) -> [PromptEffect] {
         guard !sending else { return [] }
         if failedFiles > 0 { notice = Self.removeFailedFirst; return [] }
         if uploading { notice = Self.waitsForUploads; return [] }
-        if voice == .finishing { sendAfterFinish = true; return [] }
+        if voice == .finishing { sendAfterFinish = target; return [] }
         // Before the first words show, the microphone may already have heard some: finalize, then send what came.
         if voice.isActive {
             voice = .finishing
-            sendAfterFinish = true
+            sendAfterFinish = target
             return [.stopVoice(finalize: true)]
         }
-        return send()
+        return send(to: target)
     }
 
     /// The transcriber has finalized; send only if Return explicitly requested it.
@@ -256,16 +272,16 @@ public struct PromptDraft: Equatable, Sendable {
         guard voice == .finishing else { return [] }
         keepVolatile()
         voice = noSpeech && !heardSpeech ? .unavailable(.noSpeech) : .off
-        voiceReady = voice == .off && !sendAfterFinish
+        voiceReady = voice == .off && sendAfterFinish == nil
         noSpeech = false
-        if sendAfterFinish {
-            sendAfterFinish = false
-            return send()
+        if let target = sendAfterFinish {
+            sendAfterFinish = nil
+            return send(to: target)
         }
         return []
     }
 
-    private mutating func send() -> [PromptEffect] {
+    private mutating func send(to target: PromptTarget) -> [PromptEffect] {
         let prompt = trimmed, files = ready
         if failedFiles > 0 { notice = Self.removeFailedFirst; return [] }
         guard !uploading, !prompt.isEmpty || !files.isEmpty else { return [] }
@@ -274,7 +290,7 @@ public struct PromptDraft: Equatable, Sendable {
         nextID += 1
         error = nil
         notice = nil
-        return [.send(prompt: prompt, attachments: files)]
+        return [.send(prompt: prompt, attachments: files, target: files.isEmpty ? target : .message)]
     }
 
     /// A click on one of Nod's choices goes out like a send: the microphone goes off (its words stay), the field and
@@ -285,7 +301,7 @@ public struct PromptDraft: Equatable, Sendable {
         let effects: [PromptEffect] = stopsVoice ? [.stopVoice(finalize: false)] : []
         keepVolatile()
         if stopsVoice { voice = .off }
-        sendAfterFinish = false
+        sendAfterFinish = nil
         voiceReady = false
         sending = true
         sendToken = nextID
@@ -299,6 +315,19 @@ public struct PromptDraft: Equatable, Sendable {
     public mutating func answeredKeepingText(token: Int) {
         guard sending, token == sendToken else { return }
         sending = false
+        if notice == Self.waitsForSend { notice = nil }
+    }
+
+    /// Nod took an answer that carried the field's words but no files (an answer never does): the words are gone, the
+    /// chips stay as they were, uploading, ready or failed, under the same ids, and the field takes input again.
+    public mutating func answeredKeepingFiles(token: Int) {
+        guard sending, token == sendToken else { return }
+        sending = false
+        text = ""
+        volatile = ""
+        fieldText = nil
+        voiceReady = false
+        error = nil
         if notice == Self.waitsForSend { notice = nil }
     }
 

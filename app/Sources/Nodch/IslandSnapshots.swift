@@ -39,6 +39,11 @@ enum IslandSnapshots {
         Scene(name: "rest-hover", state: .rest, hovering: true),
         Scene(name: "working", state: IslandSamples.working()),
         Scene(name: "working-open", state: IslandSamples.working()),
+        Scene(name: "working-task", state: IslandSamples.working(taskID: IslandSamples.taskID)),
+        Scene(name: "working-task-open", state: IslandSamples.working(taskID: IslandSamples.taskID), open: true),
+        // A question Nod asked before it went back to work: its text stays above the prompt, its choices do not.
+        Scene(name: "prompt-working-cached-question", state: IslandSamples.working(), open: true, prompt: PromptDraft(),
+              answer: IslandSamples.question),
         Scene(name: "working-open-untitled", state: .working(WorkActivity(title: nil, step: nil, site: nil,
                                                                              since: Date().addingTimeInterval(-425), doing: .model)), open: true),
         Scene(name: "needs-you", state: .needsYou(IslandSamples.email, more: 0), open: true),

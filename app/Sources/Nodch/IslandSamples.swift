@@ -4,9 +4,13 @@ import NodchCore
 /// Made-up states for `--demo` and `--snapshot`. Nothing here comes from or goes to a real Nod.
 enum IslandSamples {
     static func working(step: String? = "Reading the latest invoices", site: String? = "mail.google.com",
-                        title: String? = "Prepare the November expense report", seconds: TimeInterval = 42) -> IslandState {
-        .working(WorkActivity(title: title, step: step, site: site, since: Date().addingTimeInterval(-seconds), doing: .tool))
+                        title: String? = "Prepare the November expense report", seconds: TimeInterval = 42,
+                        taskID: String? = nil) -> IslandState {
+        .working(WorkActivity(title: title, step: step, site: site, since: Date().addingTimeInterval(-seconds), doing: .tool,
+                              taskID: taskID))
     }
+    /// A made-up task id: Stop on this activity stops only that task.
+    static let taskID = "00000000-0000-4000-8000-00000000d0c1"
 
     static let email = PendingApproval(
         id: "demo-approval-1", messageID: "demo-message-1", title: "Send this email?", app: "Gmail",
@@ -191,8 +195,8 @@ final class DemoActions: NodActions {
         return NodAttachment(id: UUID().uuidString.lowercased(), name: file.lastPathComponent, mimeType: "application/octet-stream", size: size)
     }
 
-    func stop() async throws {
-        print("demo: stop()")
+    func stop(_ scope: StopScope) async throws {
+        print("demo: stop(\(scope))")
         try await Task.sleep(for: .milliseconds(300))
         store?.state = .done(summary: "Stopped")
     }

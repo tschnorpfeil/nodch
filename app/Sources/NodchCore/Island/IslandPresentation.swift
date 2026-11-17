@@ -167,8 +167,24 @@ public enum IslandPresentation {
     /// `kept`: the id of an answer that arrived while the card was closed; it shows however late it is opened.
     public static func shownAnswer(_ answer: NodAnswer?, state: IslandState, now: Date = Date(), kept: String? = nil) -> NodAnswer? {
         if case .asks(let asked) = state { return asked }
-        guard let answer, answer.id == kept || now.timeIntervalSince(answer.at) < followUpWindow else { return nil }
+        guard var answer, answer.id == kept || now.timeIntervalSince(answer.at) < followUpWindow else { return nil }
+        // Only the question the island asks now offers choices; a cached one (Nod works, an approval waits, offline)
+        // stays as text for context.
+        answer.question = nil
         return answer
+    }
+
+    /// Return was meant for one question (or a new message) and the card now shows another, or nodch switched Nod:
+    /// nothing goes out, the words stay, and this shows under the field.
+    public static let targetChanged = "Nod’s question changed while your words were coming in, so nothing was sent. Check them and press Return again."
+    public static let serverChanged = "nodch switched to another Nod while your words were coming in, so nothing was sent. Press Return to send them there."
+
+    /// Stop's words: the task on show, or everything the thread runs (Nod's thread stop). `short` is the button text.
+    public static func stopName(_ scope: StopScope, short: Bool = false) -> String {
+        switch scope {
+        case .task: short ? "Stop" : "Stop this task"
+        case .thread: "Stop all work"
+        }
     }
 
     /// What the person is asked to decide right now: an approval or Nod's question, by id.

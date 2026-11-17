@@ -15,5 +15,6 @@ import NodchCore
         keys()
         promiseDrops()
         answerReady()
+        targets()
     }
 }
