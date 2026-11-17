@@ -40,7 +40,7 @@ public enum OpenTarget: String, CaseIterable, Sendable {
 
     /// `path` nil: a plain "Open Nod", as this choice says. A path (the page for what the card shows) is a link into the
     /// server nodch uses, so it always opens in the browser at that address: the Nod app may have another server
-    /// set, and it has no links to a page or a task. The path cannot leave the configured origin (`browserURL`).
+    /// set. The path cannot leave the configured origin (`browserURL`).
     public func plan(path: String?, configuration: NodConfiguration, appInstalled: Bool) -> Plan {
         let address = configuration.baseURL
         guard let path else {

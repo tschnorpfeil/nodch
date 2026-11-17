@@ -238,7 +238,16 @@ import Observation
     }
     /// The Nod session that was connected when Return was pressed.
     @ObservationIgnored private weak var submittedTo: NodActions?
-    func dropped(_ files: [DroppedFile]) { perform(draft.drop(files)) }
+    func dropped(_ files: [DroppedFile], for actions: NodActions?) {
+        guard let actions, store.actions === actions else {
+            for file in files { PromiseDrops.discard(file.url) }
+            let reason = "The Nod connection changed. Drop the files again."
+            draft.rejectDrop(reason)
+            announce(IslandPresentation.notSent(reason))
+            return
+        }
+        perform(draft.drop(files))
+    }
     func removeAttachment(_ id: Int) { draft.remove(id) }
 
     /// From the microphone's menu: nil follows the system again. A microphone that is on starts over in it.
@@ -434,7 +443,7 @@ import Observation
 
     /// What the drop tray says about where files go: the session's address, whether it is on this Mac, whether it is up.
     var dropDestination: IslandPresentation.DropDestination {
-        IslandPresentation.dropDestination(server: store.server, state: store.state, connecting: store.connecting)
+        IslandPresentation.dropDestination(server: store.server)
     }
 
     /// "Open Nod" from a button, a link or ⌘Return: the page that fits the card, in the browser at nodch's own server.

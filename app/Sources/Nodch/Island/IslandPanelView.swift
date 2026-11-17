@@ -139,7 +139,7 @@ struct IslandDropTray: View {
             Image(systemName: "arrow.down.doc.fill")
                 .font(.system(size: 28, weight: .medium))
                 .foregroundStyle(lit ? IslandStyle.accent : IslandStyle.white(IslandStyle.secondary))
-                .symbolEffect(.bounce, value: reduceMotion ? false : over)
+                .symbolEffect(.bounce, value: reduceMotion ? false : lit)
                 .padding(.bottom, 2)
             Text("Drop files for Nod")
                 .font(IslandStyle.title).foregroundStyle(IslandStyle.white(IslandStyle.primary))
@@ -157,13 +157,13 @@ struct IslandDropTray: View {
         }
         .multilineTextAlignment(.center)
         .frame(maxWidth: .infinity)
-        .padding(.vertical, over ? 30 : 24).padding(.horizontal, IslandStyle.padding)
+        .padding(.vertical, lit ? 30 : 24).padding(.horizontal, IslandStyle.padding)
         .background(shape.fill(lit ? IslandStyle.accent.opacity(0.14) : IslandStyle.white(0.06)))
         .overlay(shape.strokeBorder(lit ? IslandStyle.accent : IslandStyle.white(0.18),
                                     style: StrokeStyle(lineWidth: lit ? 1.5 : 1, dash: lit ? [] : [5, 4])))
-        .animation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.8), value: over)
+        .animation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.8), value: lit)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(over && destination.uploads ? "Release to attach the files for Nod. " + destination.spoken : destination.spoken)
+        .accessibilityLabel(lit ? "Release to attach the files for Nod. " + destination.spoken : destination.spoken)
     }
 }
 

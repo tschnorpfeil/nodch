@@ -384,16 +384,12 @@ public enum IslandPresentation {
     /// host and port, never a credential.
     public struct DropDestination: Equatable, Sendable {
         public enum Place: Equatable, Sendable { case thisMac, remote }
-        public enum Readiness: Equatable, Sendable { case ready, connecting, offline, notConfigured }
-
         /// Nil without a configured session.
         public var place: Place?
         /// "localhost:4310", "[::1]:4310", "nod.example.com:443"; nil without a configured session.
         public var address: String?
-        public var readiness: Readiness
-
-        /// Files will upload as soon as they are released.
-        public var uploads: Bool { readiness == .ready }
+        /// Files go to the configured server on release, independently of the event stream's status.
+        public var uploads: Bool { address != nil }
 
         /// "Nod on this Mac · localhost:4310" or "Remote Nod · nod.example.com:443".
         public var destination: String? {
@@ -401,14 +397,8 @@ public enum IslandPresentation {
             return (place == .thisMac ? "Nod on this Mac" : "Remote Nod") + " · " + address
         }
 
-        /// The sentence under it: how it goes on, or the next step when files could not go anywhere.
         public var note: String {
-            switch readiness {
-            case .ready: "They upload right away. Nothing is sent until Return."
-            case .connecting: "Still connecting. Files can’t upload until Nod answers."
-            case .offline: "Nod isn’t connected. Files can’t upload until it is."
-            case .notConfigured: "nodch has no Nod to upload to yet. Add its address in nodch Settings first."
-            }
+            uploads ? "Files upload on drop. Press Return to send the prompt." : "Add a Nod server in Settings to attach files."
         }
 
         /// What VoiceOver hears for the tray.
@@ -421,14 +411,11 @@ public enum IslandPresentation {
         }
     }
 
-    /// `server`: the address of the session (`IslandStore.server`), nil without one. Offline, the files could not
-    /// upload now, so the tray says so instead of promising it.
-    public static func dropDestination(server: URL?, state: IslandState, connecting: Bool) -> DropDestination {
-        guard let server, let address = hostAndPort(server) else { return .init(place: nil, address: nil, readiness: .notConfigured) }
+    /// `server`: the current session's address (`IslandStore.server`), nil without a session.
+    public static func dropDestination(server: URL?) -> DropDestination {
+        guard let server, let address = hostAndPort(server) else { return .init(place: nil, address: nil) }
         let place: DropDestination.Place = OpenTarget.isLoopback(server) ? .thisMac : .remote
-        var readiness = DropDestination.Readiness.ready
-        if case .offline = state { readiness = connecting ? .connecting : .offline }
-        return .init(place: place, address: address, readiness: readiness)
+        return .init(place: place, address: address)
     }
 
     /// "host:port", with the scheme's default port spelled out and IPv6 hosts in brackets. Only the host and the port

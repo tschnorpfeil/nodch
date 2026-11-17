@@ -8,40 +8,32 @@ extension IslandChecks {
         typealias P = IslandPresentation
         let local = URL(string: "http://localhost:4310")!, remote = URL(string: "https://nod.example.com")!
         let v6 = URL(string: "http://[::1]:4310")!, lan = URL(string: "http://192.168.1.20:4310")!
-        let rest = IslandState.rest, offline = IslandState.offline(reason: "localhost:4310")
+        let offline = IslandState.offline(reason: "localhost:4310")
 
         // Drop tray: the session's host and port, local or remote, before anything is released.
-        let onMac = P.dropDestination(server: local, state: rest, connecting: false)
+        let onMac = P.dropDestination(server: local)
         check(onMac.place == .thisMac && onMac.address == "localhost:4310" && onMac.destination == "Nod on this Mac · localhost:4310"
-              && onMac.uploads && onMac.note.contains("upload right away") && onMac.note.contains("Nothing is sent until Return"),
+              && onMac.uploads && onMac.note.contains("upload on drop") && onMac.note.contains("Press Return to send the prompt"),
               "drop tray: a Nod on this Mac shows host and port, keeps the upload timing and says nothing is sent yet")
-        let away = P.dropDestination(server: remote, state: rest, connecting: false)
+        let away = P.dropDestination(server: remote)
         check(away.place == .remote && away.address == "nod.example.com:443" && away.destination == "Remote Nod · nod.example.com:443"
               && away.uploads, "drop tray: a remote Nod says so, with the scheme's default port spelled out")
-        check(P.dropDestination(server: v6, state: rest, connecting: false).address == "[::1]:4310"
-              && P.dropDestination(server: v6, state: rest, connecting: false).place == .thisMac
-              && P.dropDestination(server: lan, state: rest, connecting: false).place == .remote
-              && P.dropDestination(server: URL(string: "http://nod.example.com")!, state: rest, connecting: false).address == "nod.example.com:80",
+        check(P.dropDestination(server: v6).address == "[::1]:4310"
+              && P.dropDestination(server: v6).place == .thisMac
+              && P.dropDestination(server: lan).place == .remote
+              && P.dropDestination(server: URL(string: "http://nod.example.com")!).address == "nod.example.com:80",
               "drop tray: IPv6 loopback is on this Mac, a LAN address is remote, http defaults to port 80")
         let secret = URL(string: "https://user:hunter2@nod.example.com:8443/path?token=abc#frag")!
-        let shown = P.dropDestination(server: secret, state: rest, connecting: false)
+        let shown = P.dropDestination(server: secret)
         check(shown.address == "nod.example.com:8443"
               && ![shown.destination, shown.note, shown.spoken].compactMap { $0 }.contains { $0.contains("hunter2") || $0.contains("token") || $0.contains("path") },
               "drop tray: only host and port show, never a credential or path")
-        let none = P.dropDestination(server: nil, state: rest, connecting: false)
-        check(none.readiness == .notConfigured && none.place == nil && none.address == nil && none.destination == nil && !none.uploads
-              && none.note.contains("Settings") && !none.note.contains("upload right away"),
-              "drop tray: without a configured session it names the next step and does not promise an upload")
-        let down = P.dropDestination(server: remote, state: offline, connecting: false)
-        let starting = P.dropDestination(server: remote, state: offline, connecting: true)
-        check(down.readiness == .offline && !down.uploads && down.destination == away.destination && !down.note.contains("right away")
-              && starting.readiness == .connecting && !starting.uploads,
-              "drop tray: a configured Nod that is not connected still names its address but does not promise an upload")
-        check(P.dropDestination(server: local, state: IslandState.needsYou(approval(cut: false), more: 0), connecting: false).uploads
-              && P.dropDestination(server: nil, state: offline, connecting: true).readiness == .notConfigured,
-              "drop tray: any connected state uploads; no server wins over an offline state")
+        let none = P.dropDestination(server: nil)
+        check(none.place == nil && none.address == nil && none.destination == nil && !none.uploads
+              && none.note.contains("Settings"),
+              "drop tray: without a configured session it names the next step and does not invite a drop")
         check(onMac.spoken.contains("localhost, port 4310") && away.spoken.contains("Remote Nod at nod.example.com, port 443")
-              && P.dropDestination(server: v6, state: rest, connecting: false).spoken.contains("[::1], port 4310"),
+              && P.dropDestination(server: v6).spoken.contains("[::1], port 4310"),
               "drop tray: VoiceOver hears the place, host and port")
 
         // The session captures its address at creation, carries no credential, and the connection clears it.
