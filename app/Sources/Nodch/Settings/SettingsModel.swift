@@ -139,8 +139,16 @@ import ServiceManagement
     func showFirstRun(_ check: ConnectionCheck, address: URL, since stamp: Int) -> Bool {
         guard !usesEnvironment, stamp == testRun, test == .idle, saved == nil else { return false }
         firstRunLead = true
-        firstRunNextStep = check.message(address: address, inSettings: true) + " Then test the connection."
+        let issue = Self.connectionIssue(check, address: address)
+        firstRunNextStep = check == .tokenRequired ? issue : issue + " Then test the connection."
         return true
+    }
+
+    static func connectionIssue(_ check: ConnectionCheck, address: URL) -> String {
+        if check == .tokenRequired {
+            return "Nod requires authentication. Enter its NOD_AUTH_TOKEN above and test the connection, or follow the source access-key setup below."
+        }
+        return check.message(address: address, inSettings: true)
     }
 
     /// The guidance goes once the saved connection works.
@@ -155,9 +163,10 @@ import ServiceManagement
         return tokenChange != .keep || settings.savedServer != address
     }
 
-    /// How to ask once connected: the registered shortcut, or where to choose one.
-    var askHint: String {
-        hotkey.inEffect.map { "Press \($0.display) to ask Nod." } ?? "Choose a shortcut below to ask Nod."
+    /// How to ask once connected. The shortcut is suspended while Settings records a new one.
+    var askHint: String? {
+        guard !recording else { return nil }
+        return hotkey.inEffect.map { "Press \($0.display) to ask Nod." } ?? "Choose a shortcut below to ask Nod."
     }
 
     /// A test still running belongs to inputs that are gone: its result is dropped.
@@ -233,6 +242,7 @@ import ServiceManagement
             onSaved()
             checkSaved(address)
         } catch {
+            resetTest()
             saved = IslandModel.describe(error)
         }
     }

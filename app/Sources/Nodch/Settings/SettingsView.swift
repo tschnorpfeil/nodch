@@ -98,9 +98,14 @@ struct SettingsView: View {
         } header: {
             Text("Nod")
         } footer: {
-            Text("Use the address you open Nod at, for example http://localhost:4310. If your Nod uses a token, it is the NOD_AUTH_TOKEN in Nod’s .env.")
-                .font(.caption).foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Use the address you open Nod at, for example http://localhost:4310. If set, the server token is NOD_AUTH_TOKEN in Nod’s .env.")
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Link("Source access-key setup (NOD_URL and NOD_DATA_ROOT)",
+                     destination: URL(string: "https://github.com/tschnorpfeil/nodch#build-from-source")!)
+            }
+            .font(.caption)
         }
         .disabled(model.usesEnvironment)
     }
@@ -242,14 +247,17 @@ struct SettingsView: View {
                 } else { askHint }
             }
         case .done(let check, let address):
-            status(check.message(address: address, inSettings: true), symbol: "exclamationmark.triangle.fill", color: .red)
+            status(SettingsModel.connectionIssue(check, address: address),
+                   symbol: "exclamationmark.triangle.fill", color: .red)
         case .invalid(let reason):
             status(reason, symbol: "exclamationmark.triangle.fill", color: .red)
         }
     }
 
-    private var askHint: some View {
-        Text(model.askHint).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+    @ViewBuilder private var askHint: some View {
+        if let hint = model.askHint {
+            Text(hint).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+        }
     }
 
     private func status(_ text: String, symbol: String, color: Color) -> some View {
