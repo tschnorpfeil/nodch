@@ -82,7 +82,8 @@ session.start()
 The app does this in `makeNodSession` (Connection.swift): it creates the session
 with the island's store and starts it. The session implements the `NodActions` seam
 in `Model.swift`. `openNod(path:)` opens the configured HTTP server plus the
-requested path using `NSWorkspace`.
+requested path in the browser using `NSWorkspace`. A nil path follows the
+user's general Open Nod setting.
 
 For interactive client assertions against the running fixture:
 

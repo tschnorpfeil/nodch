@@ -18,6 +18,8 @@ enum IslandSnapshots {
         var drop = IslandDropZone.none
         /// The card opened as the drop tray for files dragged toward it.
         var tray = false
+        /// The session's address; nil is no configured session.
+        var server: URL? = IslandSamples.localServer
         var answer: NodAnswer?
         var picked: Set<String> = []
         /// The click guard still holds: Approve, Decline and the choices show dimmed.
@@ -80,8 +82,15 @@ enum IslandSnapshots {
         Scene(name: "drop-near", state: .rest, drop: .near),
         Scene(name: "drop-over", state: IslandSamples.working(), drop: .over),
         Scene(name: "drop-open", state: .rest, open: true, prompt: IslandSamples.attachments, drop: .over),
+        Scene(name: "drop-over-working-card", state: IslandSamples.working(taskID: IslandSamples.taskID),
+              open: true, drop: .over, server: IslandSamples.remoteServer),
         Scene(name: "drop-tray", state: .rest, open: true, drop: .near, tray: true),
         Scene(name: "drop-tray-over", state: IslandSamples.working(), open: true, drop: .over, tray: true),
+        Scene(name: "drop-tray-remote", state: .rest, open: true, drop: .near, tray: true, server: IslandSamples.remoteServer),
+        Scene(name: "drop-tray-remote-over", state: .rest, open: true, drop: .over, tray: true, server: IslandSamples.remoteServer),
+        Scene(name: "drop-tray-not-configured", state: IslandSamples.offline, open: true, drop: .near, tray: true, server: nil),
+        Scene(name: "drop-tray-offline", state: IslandSamples.offline, open: true, drop: .over, tray: true),
+        Scene(name: "needs-you-cut-guarded", state: .needsYou(IslandSamples.cutNote, more: 0), open: true, guarded: true),
     ].map { scene in
         var scene = scene
         if scene.name == "working-open" { scene.open = true }
@@ -127,6 +136,7 @@ enum IslandSnapshots {
 
         let store = IslandStore(state: scene.state, answer: scene.answer)
         store.connecting = scene.connecting
+        store.server = scene.server
         let model = IslandModel(store: store)
         model.picked = scene.picked
         if let login = scene.login {

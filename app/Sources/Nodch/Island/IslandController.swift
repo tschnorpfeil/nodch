@@ -73,7 +73,7 @@ final class IslandController {
             model.perform(model.draft.closed())
         }
         presenter.view.onDragOver = { [weak self] over in self?.dragOver(over) }
-        presenter.view.onDrop = { [weak self] files in self?.dropped(files) }
+        presenter.view.onDrop = { [weak self] files, actions in self?.dropped(files, for: actions) }
         presenter.onIdle = { [weak self] in self?.refresh() }
 
         let center = NotificationCenter.default
@@ -386,7 +386,7 @@ final class IslandController {
 
     /// Files dropped on the island: the prompt opens with the keyboard (and the microphone as it was), one chip per
     /// file, each uploading at once. Nothing is sent until Return.
-    private func dropped(_ files: [DroppedFile]) {
+    private func dropped(_ files: [DroppedFile], for actions: NodActions?) {
         dragEnd?.cancel()
         // The tray the files landed on turns into the prompt instead of folding away first.
         let fromTray = openCause == .dropTray
@@ -409,7 +409,7 @@ final class IslandController {
         } else {
             open(.drop)
         }
-        model.dropped(files)
+        model.dropped(files, for: actions)
         refresh()
     }
 }

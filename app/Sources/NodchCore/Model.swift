@@ -48,6 +48,9 @@ public struct PendingApproval: Equatable, Sendable, Identifiable {
     public var body: String?
     /// Nod cut the body; the full text is only in Nod's window.
     public var bodyCut: Bool
+    /// The island may send Approve for this: only when the person saw all of it. A shortened approval is reviewed in
+    /// Nod (and approved there); the island can still decline it.
+    public var approvableHere: Bool { !bodyCut }
 
     public init(id: String, messageID: String, title: String, app: String, fields: [Field], body: String?, bodyCut: Bool,
                 question: String? = nil) {
@@ -128,8 +131,10 @@ public enum IslandState: Equatable, Sendable {
     func answer(question: NodAnswer, choices: [NodQuestion.Choice], text: String) async throws
     /// Stops the work `scope` names, once. A task stop that fails is reported, never repeated as a thread stop.
     func stop(_ scope: StopScope) async throws
-    /// Opens Nod's own window, e.g. "/" or "/vault".
-    func openNod(path: String)
+    /// Opens Nod. `nil` is a plain "Open Nod": the app or the browser, as chosen in Settings. A path is "Open Nod" for
+    /// what the card shows (e.g. "/" or "/tasks"): the browser, at the exact server nodch uses, whatever the Nod app
+    /// has set. Never carries the token or key, and never does anything in Nod.
+    func openNod(path: String?)
 }
 
 @MainActor @Observable public final class IslandStore {
@@ -139,6 +144,9 @@ public enum IslandState: Equatable, Sendable {
     /// A session has started and no state or error has come back yet: the offline card says "Connecting".
     public var connecting = false
     public weak var actions: NodActions?
+    /// The Nod address the current session talks to (scheme, host and port; never a credential). Set with the session
+    /// and cleared when it goes, so "nil" means nodch has no session to upload to.
+    public var server: URL?
 
     public init(state: IslandState = .offline(reason: "Not connected"), answer: NodAnswer? = nil) {
         self.state = state; self.answer = answer

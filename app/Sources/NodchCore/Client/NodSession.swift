@@ -27,6 +27,7 @@ import Foundation
         self.retryBase = max(0.01, retryBase)
         self.retryCap = max(self.retryBase, retryCap)
         store.actions = self
+        store.server = client.configuration.baseURL
     }
 
     deinit { connectionTask?.cancel(); refreshTask?.cancel(); retryWait?.cancel(); fetchTask?.cancel(); doneTask?.cancel() }
@@ -227,21 +228,24 @@ import Foundation
         }
     }
 
-    public func openNod(path: String) {
+    public func openNod(path: String?) {
         let workspace = NSWorkspace.shared
-        let fallbackURL = client.configuration.browserURL(path: path)
         let appURL = workspace.urlForApplication(withBundleIdentifier: "dev.nod.desktop")
-        // The app keeps its own server setting: which one opens is the person's choice (Settings › Open Nod in).
-        guard let appURL, OpenTarget.saved(UserDefaults.standard)
-            .usesApp(address: client.configuration.baseURL, appInstalled: true) else {
-            workspace.open(fallbackURL)
-            return
-        }
-        let configuration = NSWorkspace.OpenConfiguration()
-        configuration.activates = true
-        workspace.openApplication(at: appURL, configuration: configuration) { app, error in
-            if app == nil || error != nil {
-                Task { @MainActor in NSWorkspace.shared.open(fallbackURL) }
+        // The app keeps its own server setting: a plain open follows the person's choice (Settings › Open Nod in); an
+        // open for what the card shows goes to the browser, at the server nodch uses.
+        let plan = OpenTarget.saved(UserDefaults.standard)
+            .plan(path: path, configuration: client.configuration, appInstalled: appURL != nil)
+        switch plan {
+        case .browser(let url):
+            workspace.open(url)
+        case .app(let fallbackURL):
+            guard let appURL else { workspace.open(fallbackURL); return }
+            let configuration = NSWorkspace.OpenConfiguration()
+            configuration.activates = true
+            workspace.openApplication(at: appURL, configuration: configuration) { app, error in
+                if app == nil || error != nil {
+                    Task { @MainActor in NSWorkspace.shared.open(fallbackURL) }
+                }
             }
         }
     }

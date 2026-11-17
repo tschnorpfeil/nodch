@@ -58,7 +58,7 @@ final class IslandView: NSView {
     var onHover: ((Bool) -> Void)?
     /// A file drag is over the shape (true) or left it.
     var onDragOver: ((Bool) -> Void)?
-    var onDrop: (([DroppedFile]) -> Void)?
+    var onDrop: (([DroppedFile], NodActions?) -> Void)?
 
     init(model: IslandModel, onHeight: @escaping (CGFloat) -> Void) {
         self.model = model
@@ -86,7 +86,7 @@ final class IslandView: NSView {
     private func dragTarget(_ sender: any NSDraggingInfo) -> NSDragOperation {
         let inside = DropReader.carriesFiles(sender.draggingPasteboard) && shapeContains(convert(sender.draggingLocation, from: nil))
         onDragOver?(inside)
-        return inside ? .copy : []
+        return inside && model.store.actions != nil ? .copy : []
     }
 
     override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation { dragTarget(sender) }
@@ -95,8 +95,15 @@ final class IslandView: NSView {
     override func prepareForDragOperation(_ sender: any NSDraggingInfo) -> Bool { !dragTarget(sender).isEmpty }
 
     override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
-        guard prepareForDragOperation(sender) else { return false }
-        DropReader.read(sender.draggingPasteboard) { [weak self] files in self?.onDrop?(files) }
+        guard prepareForDragOperation(sender), let actions = model.store.actions else { return false }
+        // Mail and Photos may deliver files later. Keep the session the person released them onto.
+        DropReader.read(sender.draggingPasteboard) { [weak self, weak actions] files in
+            guard let receive = self?.onDrop else {
+                for file in files { PromiseDrops.discard(file.url) }
+                return
+            }
+            receive(files, actions)
+        }
         return true
     }
 

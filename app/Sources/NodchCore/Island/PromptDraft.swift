@@ -375,6 +375,9 @@ public struct PromptDraft: Equatable, Sendable {
         return (accepted, notes.isEmpty ? nil : notes.joined(separator: " "))
     }
 
+    /// A promised drop cannot go to the session it was released onto.
+    public mutating func rejectDrop(_ reason: String) { notice = reason }
+
     /// Files dropped on the island: a chip for each one that is accepted, uploading at once.
     public mutating func drop(_ files: [DroppedFile]) -> [PromptEffect] {
         guard !sending else { notice = Self.waitsForSend; return [] }

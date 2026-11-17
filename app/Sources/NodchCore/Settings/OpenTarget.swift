@@ -25,9 +25,29 @@ public enum OpenTarget: String, CaseIterable, Sendable {
         }
     }
 
-    static func isLoopback(_ address: URL) -> Bool {
+    public static func isLoopback(_ address: URL) -> Bool {
         guard let host = address.host?.lowercased() else { return false }
         return ["localhost", "127.0.0.1", "::1", "[::1]"].contains(host)
+    }
+
+    /// How an "Open Nod" goes out.
+    public enum Plan: Equatable, Sendable {
+        /// This address in the default browser.
+        case browser(URL)
+        /// The Nod app; the browser address if it cannot be launched.
+        case app(fallback: URL)
+    }
+
+    /// `path` nil: a plain "Open Nod", as this choice says. A path (the page for what the card shows) is a link into the
+    /// server nodch uses, so it always opens in the browser at that address: the Nod app may have another server
+    /// set. The path cannot leave the configured origin (`browserURL`).
+    public func plan(path: String?, configuration: NodConfiguration, appInstalled: Bool) -> Plan {
+        let address = configuration.baseURL
+        guard let path else {
+            let home = configuration.browserURL(path: "/")
+            return usesApp(address: address, appInstalled: appInstalled) ? .app(fallback: home) : .browser(home)
+        }
+        return .browser(configuration.browserURL(path: path))
     }
 
     public var title: String {

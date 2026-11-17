@@ -9,6 +9,10 @@ enum IslandSamples {
         .working(WorkActivity(title: title, step: step, site: site, since: Date().addingTimeInterval(-seconds), doing: .tool,
                               taskID: taskID))
     }
+    /// Made-up servers for the drop tray: on this Mac, and another machine.
+    static let localServer = URL(string: "http://localhost:4310")!
+    static let remoteServer = URL(string: "https://nod.example.com")!
+
     /// A made-up task id: Stop on this activity stops only that task.
     static let taskID = "00000000-0000-4000-8000-00000000d0c1"
 
@@ -201,8 +205,8 @@ final class DemoActions: NodActions {
         store?.state = .done(summary: "Stopped")
     }
 
-    func openNod(path: String) {
-        print("demo: openNod(path: \"\(path)\")")
+    func openNod(path: String?) {
+        print("demo: openNod(path: \(path.map { "\"\($0)\"" } ?? "nil"))")
     }
 
     struct DemoError: LocalizedError {
@@ -222,6 +226,8 @@ final class DemoScript {
     init(store: IslandStore) {
         self.store = store
         actions.store = store
+        // The drop tray names where files would go.
+        store.server = IslandSamples.localServer
     }
 
     func start() {
