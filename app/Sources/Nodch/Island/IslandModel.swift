@@ -75,6 +75,7 @@ import Observation
         var wing = IslandWing()
         var line = ""
         var since: Date?
+        var stopScope: StopScope?
         /// Done: how long the turn took, when worth saying.
         var took: TimeInterval?
         /// Files are dragged toward (or over) the closed island.
@@ -136,7 +137,7 @@ import Observation
     /// What the open card offers to the keyboard (`IslandPresentation.keyAction`).
     var cardOffers: IslandPresentation.CardOffers {
         guard isOpen else { return .init() }
-        guard showsPromptCard else { return .init(approval: approval != nil, stop: tone == .working) }
+        guard showsPromptCard else { return .init(approval: approval != nil, stop: activity != nil) }
         let field = draft.display.trimmingCharacters(in: .whitespacesAndNewlines)
         return .init(picks: asking?.question?.multiple == true && !picked.isEmpty && field.isEmpty && !draft.sending,
                      answer: shownAnswer != nil)
@@ -184,13 +185,18 @@ import Observation
         }
     }
 
-    func stop() {
-        guard !stopping else { return }
+    /// Stops what the island shows: that activity's task, or all of the thread's work when it has none. Nothing
+    /// without a running activity (a wing still shrinking from "working" keeps its Stop for a moment). A failure is
+    /// shown, never retried or widened to all work.
+    func stop(_ scope: StopScope) {
+        guard !stopping, activity?.stopScope == scope else { return }
         guard let actions = store.actions else { actionError = Self.notConnected; return }
         stopping = true
         actionError = nil
         Task {
-            do { try await actions.stop() } catch { actionError = "Couldn’t stop: " + Self.describe(error) }
+            do { try await actions.stop(scope) } catch {
+                actionError = (scope == .thread ? "Couldn’t stop all work: " : "Couldn’t stop the task: ") + Self.describe(error)
+            }
             stopping = false
         }
     }
@@ -207,7 +213,7 @@ import Observation
                 if !finalize { voiceGeneration += 1 }
                 voice?.stop(finalize: finalize)
             case .upload(let id, let file): upload(id, file)
-            case .send(let prompt, let attachments): send(prompt, attachments)
+            case .send(let prompt, let attachments, let target): send(prompt, attachments, target: target)
             }
         }
     }
@@ -217,11 +223,17 @@ import Observation
     func toggleVoice() { perform(draft.toggleVoice()) }
     /// Return: sends once, after the microphone is off. On success the card closes; on failure the text stays with
     /// the error under it.
+    /// The question (or new message) and the Nod that Return meant are taken now: a send that waits for dictation
+    /// goes out only if the card still shows them (`send`).
     func submitPrompt() {
-        guard IslandPresentation.acceptsTypedSubmit(question: asking != nil, draft: draft,
+        guard draft.acceptsSubmit,
+              IslandPresentation.acceptsTypedSubmit(question: asking != nil, draft: draft,
                                                     shownFor: Date().timeIntervalSince(approvalShownAt)) else { return }
-        perform(draft.submit())
+        submittedTo = store.actions
+        perform(draft.submit(to: .current(question: asking?.id, files: draft.ready)))
     }
+    /// The Nod session that was connected when Return was pressed.
+    @ObservationIgnored private weak var submittedTo: NodActions?
     func dropped(_ files: [DroppedFile]) { perform(draft.drop(files)) }
     func removeAttachment(_ id: Int) { draft.remove(id) }
 
@@ -333,9 +345,21 @@ import Observation
         }
     }
 
-    private func send(_ prompt: String, _ attachments: [NodAttachment]) {
+    private func send(_ prompt: String, _ attachments: [NodAttachment], target: PromptTarget) {
         guard let actions = store.actions else { draft.sendFailed(Self.notConnected); announce(IslandPresentation.notSent(Self.notConnected)); return }
         let token = draft.sendToken
+        let intended = submittedTo
+        submittedTo = nil
+        // Return was meant for what the card showed then. A question that changed, appeared or went while the words
+        // were finalized, or another Nod, calls the send off; the words and files stay for the person to check.
+        let changed = intended !== actions ? IslandPresentation.serverChanged
+            : target != .current(question: asking?.id, files: attachments) ? IslandPresentation.targetChanged : nil
+        if let changed {
+            draft.sendFailed(changed, token: token)
+            announce(IslandPresentation.notSent(changed))
+            if isOpen, showsPromptCard { focusToken += 1 }
+            return
+        }
         // Words typed under Nod's open question answer it, as Nod's own composer does; files go out as a new message.
         let asked = attachments.isEmpty ? asking : nil
         let choices = asked?.question.map { question in question.choices.filter { picked.contains($0.id) } } ?? []
@@ -357,10 +381,14 @@ import Observation
     private func finishSend(token: Int, questionID: String?, keepingText: Bool = false) {
         guard draft.sending, draft.sendToken == token else { return }
         if let questionID, asking?.id == questionID { picked = [] }
-        if keepingText { draft.answeredKeepingText(token: token) } else { _ = draft.sent(token: token) }
+        // An answer never carries files: chips dropped beside it (uploading, ready or failed) stay for a later message.
+        let keepingFiles = !keepingText && questionID != nil && !draft.attachments.isEmpty
+        if keepingText { draft.answeredKeepingText(token: token) }
+        else if keepingFiles { draft.answeredKeepingFiles(token: token) }
+        else { _ = draft.sent(token: token) }
         if let current = asking, current.id != questionID {
             if isOpen { focusToken += 1 }
-        } else if !keepingText {
+        } else if !keepingText && !keepingFiles {
             onSent()
         } else if isOpen, showsPrompt {
             focusToken += 1

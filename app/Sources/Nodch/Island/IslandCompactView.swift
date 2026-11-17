@@ -80,7 +80,7 @@ struct IslandCompactView: View {
                     .foregroundStyle(IslandStyle.white(IslandStyle.secondary))
                     .accessibilityLabel("Took \(IslandPresentation.elapsed(took))")
             }
-            if shown.wing.showsStop { IslandStopButton(model: model) }
+            if shown.wing.showsStop, let scope = shown.stopScope { IslandStopButton(model: model, scope: scope) }
             if shown.wing.more > 0 { IslandMoreBadge(more: shown.wing.more) }
             if shown.wing.showsChevron {
                 Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold))
@@ -254,9 +254,10 @@ struct IslandElapsed: View {
 
 struct IslandStopButton: View {
     var model: IslandModel
+    let scope: StopScope
 
     var body: some View {
-        Button { model.stop() } label: {
+        Button { model.stop(scope) } label: {
             ZStack {
                 Circle().fill(IslandStyle.white(0.16))
                 if model.stopping {
@@ -269,9 +270,9 @@ struct IslandStopButton: View {
             .contentShape(Circle())
         }
         .buttonStyle(.plain)
-        .disabled(model.stopping)
-        .help("Stop Nod")
-        .accessibilityLabel("Stop Nod")
+        .disabled(model.stopping || model.activity?.stopScope != scope)
+        .help(IslandPresentation.stopName(scope))
+        .accessibilityLabel(IslandPresentation.stopName(scope))
     }
 }
 

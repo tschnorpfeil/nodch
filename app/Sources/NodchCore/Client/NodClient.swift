@@ -152,8 +152,16 @@ public final class NodClient: Sendable {
         }.joined(separator: "\n")
     }
 
-    public func stop() async throws {
-        var request = try configuration.request(path: "/api/thread/stop", method: "POST")
+    /// One POST, never retried and never widened: a task stop that fails does not fall back to the thread stop.
+    public func stop(_ scope: StopScope) async throws {
+        let path: String
+        switch scope {
+        case .thread: path = "/api/thread/stop"
+        case .task(let id):
+            guard let id = UUID(uuidString: id) else { throw NodClientError.invalidInput("This task can’t be stopped from nodch.") }
+            path = "/api/tasks/\(id.uuidString.lowercased())/stop"
+        }
+        var request = try configuration.request(path: path, method: "POST")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = Data("{}".utf8)
         _ = try await perform(request)

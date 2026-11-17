@@ -12,10 +12,25 @@ public struct WorkActivity: Equatable, Sendable {
     public var site: String?
     public var since: Date
     public var doing: Doing
+    /// Nod's `taskId` for this activity: a task Nod can stop on its own. Nil for the chat's own turn (`StopScope.thread`).
+    /// Kept as Nod sent it: an id that is not a UUID makes the task stop fail, it never widens to the thread.
+    public var taskID: String?
 
-    public init(title: String?, step: String?, site: String?, since: Date, doing: Doing) {
+    public init(title: String?, step: String?, site: String?, since: Date, doing: Doing, taskID: String? = nil) {
         self.title = title; self.step = step; self.site = site; self.since = since; self.doing = doing
+        self.taskID = taskID
     }
+
+    /// What Stop stops for this activity: the task on show, or all of the thread's work when it has no task.
+    public var stopScope: StopScope { taskID.map(StopScope.task) ?? .thread }
+}
+
+/// What a Stop click asks Nod to end. Nod 915e4f1: `POST /api/tasks/:id/stop` (src/server/tasks.ts) ends one task;
+/// `POST /api/thread/stop` (src/server/app.ts) ends everything the thread runs. A failed task stop never becomes a
+/// thread stop.
+public enum StopScope: Equatable, Sendable {
+    case task(String)
+    case thread
 }
 
 /// A pending approval, mapped from Nod's `MessageApproval` with `state == "pending"`.
@@ -111,7 +126,8 @@ public enum IslandState: Equatable, Sendable {
     func answer(approval: PendingApproval, approved: Bool) async throws
     /// Answers Nod's open question with the picked `choices` and/or the person's own `text`. One action per click, never repeated.
     func answer(question: NodAnswer, choices: [NodQuestion.Choice], text: String) async throws
-    func stop() async throws
+    /// Stops the work `scope` names, once. A task stop that fails is reported, never repeated as a thread stop.
+    func stop(_ scope: StopScope) async throws
     /// Opens Nod's own window, e.g. "/" or "/vault".
     func openNod(path: String)
 }

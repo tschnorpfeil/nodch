@@ -211,9 +211,9 @@ import Foundation
         throw error
     }
 
-    public func stop() async throws {
+    public func stop(_ scope: StopScope) async throws {
         let started = generation
-        do { try await client.stop(); refreshAfterChange(started) }
+        do { try await client.stop(scope); refreshAfterChange(started) }
         catch { handleActionError(error, started); throw error }
     }
 

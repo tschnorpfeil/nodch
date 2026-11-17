@@ -209,8 +209,9 @@ final class IslandController {
     static func apply(_ compact: (leading: CGFloat, trailing: CGFloat)?, to model: IslandModel, placement: IslandPlacement) {
         guard let compact, let wing = model.wing(notch: placement.isNotch) else { return }
         let drop = model.isOpen ? IslandDropZone.none : model.dropZone
-        let shown = IslandModel.Shown(tone: model.tone, wing: wing, line: model.wingLine, since: model.activity?.since,
-                                     took: IslandPresentation.took(model.state), drop: drop)
+        let activity = model.activity
+        let shown = IslandModel.Shown(tone: model.tone, wing: wing, line: model.wingLine, since: activity?.since,
+                                     stopScope: activity?.stopScope, took: IslandPresentation.took(model.state), drop: drop)
         if shown != model.shown { model.shown = shown }
         let rect = IslandGeometry.compact(placement, leading: compact.leading, trailing: compact.trailing)
         var layout = model.layout
@@ -306,7 +307,8 @@ final class IslandController {
         switch action {
         case .approve: model.answer(approved: true)
         case .decline: model.answer(approved: false)
-        case .stop: model.stop()
+        case .stop:
+            if let scope = model.shown.stopScope { model.stop(scope) }
         case .sendPicks: model.sendPicks()
         case .copyAnswer: model.copyAnswer()
         case .openNod: model.openNod()
