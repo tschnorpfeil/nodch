@@ -137,7 +137,9 @@ import Observation
     /// What the open card offers to the keyboard (`IslandPresentation.keyAction`).
     var cardOffers: IslandPresentation.CardOffers {
         guard isOpen else { return .init() }
-        guard showsPromptCard else { return .init(approval: approval != nil, stop: activity != nil) }
+        guard showsPromptCard else {
+            return .init(approval: approval != nil, approvable: approval?.0.approvableHere ?? true, stop: activity != nil)
+        }
         let field = draft.display.trimmingCharacters(in: .whitespacesAndNewlines)
         return .init(picks: asking?.question?.multiple == true && !picked.isEmpty && field.isEmpty && !draft.sending,
                      answer: shownAnswer != nil)
@@ -158,6 +160,8 @@ import Observation
 
     func answer(approved: Bool) {
         guard answering == nil, let (approval, _) = approval else { return }
+        // A shortened approval is approved in Nod, after reading all of it. Declining stays open.
+        if approved, !approval.approvableHere { actionError = IslandPresentation.cannotApproveShortened; return }
         guard IslandPresentation.acceptsAnswer(shownFor: Date().timeIntervalSince(approvalShownAt)) else { return }
         guard let actions = store.actions else { actionError = Self.notConnected; return }
         answering = approved
@@ -423,10 +427,21 @@ import Observation
         defaults.set(true, forKey: IslandPresentation.loginOfferedKey)
     }
 
-    /// "Open Nod" from a button, a link or ⌘Return. Without a connection the card stays and says why.
-    func openNod(path: String = "/") {
+    /// The page of Nod the card on show belongs to (`IslandPresentation.openPage`); nil opens Nod as Settings says.
+    var openPage: IslandPresentation.NodPage? {
+        IslandPresentation.openPage(store.state, prompt: showsPromptCard, answerShown: shownAnswer != nil)
+    }
+
+    /// What the drop tray says about where files go: the session's address, whether it is on this Mac, whether it is up.
+    var dropDestination: IslandPresentation.DropDestination {
+        IslandPresentation.dropDestination(server: store.server, state: store.state, connecting: store.connecting)
+    }
+
+    /// "Open Nod" from a button, a link or ⌘Return: the page that fits the card, in the browser at nodch's own server.
+    /// Without a connection the card stays and says why.
+    func openNod() {
         guard let actions = store.actions else { actionError = Self.notConnected; return }
-        actions.openNod(path: path)
+        actions.openNod(path: openPage?.path)
         onOpenedNod()
     }
 

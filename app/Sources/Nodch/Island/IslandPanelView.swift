@@ -18,7 +18,7 @@ struct IslandPanelView: View {
                 if !layout.notch { header }
                 ZStack(alignment: .topLeading) {
                     if model.dropTray {
-                        IslandDropTray(over: model.dropZone == .over).transition(.opacity)
+                        IslandDropTray(over: model.dropZone == .over, destination: model.dropDestination).transition(.opacity)
                     } else if model.showsPromptCard {
                         IslandPromptCard(model: model, focused: $promptFocused).transition(.opacity)
                     } else {
@@ -127,31 +127,43 @@ struct IslandPanelView: View {
 // Adapted from Pippa: app/Sources/Pippa/Views/IslandViews.swift (IslandPanelView.dropTray)
 struct IslandDropTray: View {
     var over: Bool
+    /// Where the files would go, from the session's address (`IslandModel.dropDestination`).
+    var destination: IslandPresentation.DropDestination
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: IslandStyle.wellRadius, style: .continuous)
+        // Lit only when files would really go to Nod: a tray that cannot upload does not invite a drop.
+        let lit = over && destination.uploads
         VStack(spacing: IslandStyle.buttonGap) {
             Image(systemName: "arrow.down.doc.fill")
                 .font(.system(size: 28, weight: .medium))
-                .foregroundStyle(over ? IslandStyle.accent : IslandStyle.white(IslandStyle.secondary))
+                .foregroundStyle(lit ? IslandStyle.accent : IslandStyle.white(IslandStyle.secondary))
                 .symbolEffect(.bounce, value: reduceMotion ? false : over)
                 .padding(.bottom, 2)
             Text("Drop files for Nod")
                 .font(IslandStyle.title).foregroundStyle(IslandStyle.white(IslandStyle.primary))
-            Text("They upload right away. Nothing is sent until Return.")
+            if let line = destination.destination {
+                HStack(spacing: 5) {
+                    Image(systemName: destination.place == .thisMac ? "laptopcomputer" : "network")
+                        .font(.system(size: 11, weight: .semibold)).accessibilityHidden(true)
+                    Text(line).lineLimit(1).truncationMode(.middle)
+                }
+                .font(IslandStyle.small.weight(.semibold)).foregroundStyle(IslandStyle.white(IslandStyle.primary - 0.1))
+            }
+            Text(destination.note)
                 .font(IslandStyle.small).foregroundStyle(IslandStyle.white(IslandStyle.secondary))
                 .fixedSize(horizontal: false, vertical: true)
         }
         .multilineTextAlignment(.center)
         .frame(maxWidth: .infinity)
         .padding(.vertical, over ? 30 : 24).padding(.horizontal, IslandStyle.padding)
-        .background(shape.fill(over ? IslandStyle.accent.opacity(0.14) : IslandStyle.white(0.06)))
-        .overlay(shape.strokeBorder(over ? IslandStyle.accent : IslandStyle.white(0.18),
-                                    style: StrokeStyle(lineWidth: over ? 1.5 : 1, dash: over ? [] : [5, 4])))
+        .background(shape.fill(lit ? IslandStyle.accent.opacity(0.14) : IslandStyle.white(0.06)))
+        .overlay(shape.strokeBorder(lit ? IslandStyle.accent : IslandStyle.white(0.18),
+                                    style: StrokeStyle(lineWidth: lit ? 1.5 : 1, dash: lit ? [] : [5, 4])))
         .animation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.8), value: over)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(over ? "Release to attach the files for Nod" : "Drop files for Nod")
+        .accessibilityLabel(over && destination.uploads ? "Release to attach the files for Nod. " + destination.spoken : destination.spoken)
     }
 }
 
@@ -766,39 +778,34 @@ struct IslandApprovalCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: IslandStyle.gap) {
             IslandScrollingArea(maxHeight: detailsMax) { details }
-            if approval.bodyCut {
+            if !approval.approvableHere {
+                // The preview stays; the one way on is Review in Nod below. Approving a text that was not shown in full
+                // is Nod's to offer, so there is no Approve here.
                 HStack(alignment: .firstTextBaseline, spacing: 7) {
                     Image(systemName: "scissors").font(.system(size: 11, weight: .semibold)).foregroundStyle(IslandStyle.warn)
                         .accessibilityHidden(true)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Nod shortened this text. The full text is in Nod.")
-                            .font(IslandStyle.small).foregroundStyle(IslandStyle.white(IslandStyle.secondary + 0.1))
-                            .fixedSize(horizontal: false, vertical: true)
-                        Button { model.openNod() } label: {
-                            HStack(spacing: 3) {
-                                Text("Open Nod for the full text")
-                                Image(systemName: "arrow.up.right").font(.system(size: 9, weight: .bold))
-                            }
-                            .font(IslandStyle.small.weight(.semibold)).foregroundStyle(IslandStyle.accent)
-                            .fixedSize()
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Open Nod for the full text")
-                    }
+                    Text(IslandPresentation.shortenedNotice)
+                        .font(IslandStyle.small).foregroundStyle(IslandStyle.white(IslandStyle.secondary + 0.1))
+                        .fixedSize(horizontal: false, vertical: true)
                 }
+                .accessibilityElement(children: .combine)
             }
             if let error = model.actionError { IslandErrorLine(text: error) }
             IslandButtonRow(lead: true) {
-                IslandOpenButton(model: model)
-                decision("Decline", approved: false)
-                decision("Approve", approved: true)
+                if approval.approvableHere {
+                    IslandOpenButton(model: model)
+                    decision("Decline", approved: false)
+                    decision("Approve", approved: true)
+                } else {
+                    IslandOpenButton(model: model, prominent: true, title: IslandPresentation.reviewInNod)
+                    decision("Decline", approved: false)
+                }
             }
             if more > 0 {
                 Text(more == 1 ? "1 more approval waits after this one." : "\(more) more approvals wait after this one.")
                     .font(IslandStyle.caption).foregroundStyle(IslandStyle.white(IslandStyle.tertiary + 0.1))
             }
-            Text(IslandPresentation.approvalHints).font(IslandStyle.caption)
+            Text(IslandPresentation.approvalHints(approvable: approval.approvableHere)).font(IslandStyle.caption)
                 .foregroundStyle(IslandStyle.white(IslandStyle.tertiary))
                 .accessibilityHidden(true)
         }
@@ -984,11 +991,12 @@ struct IslandOpenButton: View {
     var prominent = false
     /// ⌘↩ in the button; off beside the prompt field, whose footer names it instead.
     var showsKey = true
+    var title = "Open Nod"
 
     var body: some View {
         Button { model.openNod() } label: {
             HStack(spacing: 5) {
-                Text("Open Nod")
+                Text(title)
                 Image(systemName: "arrow.up.right").font(.system(size: 9, weight: .bold)).opacity(0.8)
                 // The key in the hint style, inside the button: these rows have room, so the card does not grow.
                 if showsKey {
@@ -998,8 +1006,8 @@ struct IslandOpenButton: View {
             }
         }
         .buttonStyle(IslandButtonStyle(prominent: prominent))
-        .help("Open Nod (⌘↩)")
-        .accessibilityLabel("Open Nod")
+        .help("\(title) (⌘↩)")
+        .accessibilityLabel(title)
         .accessibilityHint("Command-Return")
     }
 }

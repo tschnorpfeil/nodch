@@ -59,7 +59,9 @@ import NodchCore
     func connect() {
         if let session {
             session.disconnect()
+            // The old session's address goes with it: the drop tray names only the server a session talks to.
             if store.actions === session { store.actions = nil }
+            store.server = nil
             self.session = nil
         }
         let previous = resolved?.address
@@ -75,6 +77,7 @@ import NodchCore
             session.start()
         } catch {
             resolved = nil
+            store.server = nil
             store.answer = nil
             store.connecting = false
             store.state = .offline(reason: IslandModel.describe(error))

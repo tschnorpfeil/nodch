@@ -307,6 +307,8 @@ public enum IslandPresentation {
     public struct CardOffers: Equatable, Sendable {
         /// The approval card with Approve and Decline.
         public var approval: Bool
+        /// The approval on show can be approved here. False for a shortened one: Review in Nod stands in for Approve.
+        public var approvable: Bool
         /// A Stop button for the running turn.
         public var stop: Bool
         /// Ticked choices on a multiple-choice question, and an empty field: they can go out as they are.
@@ -314,21 +316,21 @@ public enum IslandPresentation {
         /// Nod's answer shows above the prompt: it can be copied whole.
         public var answer: Bool
 
-        public init(approval: Bool = false, stop: Bool = false, picks: Bool = false, answer: Bool = false) {
-            self.approval = approval; self.stop = stop; self.picks = picks; self.answer = answer
+        public init(approval: Bool = false, approvable: Bool = true, stop: Bool = false, picks: Bool = false, answer: Bool = false) {
+            self.approval = approval; self.approvable = approvable; self.stop = stop; self.picks = picks; self.answer = answer
         }
     }
 
     public enum KeyAction: Equatable, Sendable { case approve, decline, stop, sendPicks, openNod, copyAnswer }
 
-    /// ⌘Return does what "Open Nod" does, on every card. ⌥Return approves and ⌥⌫ declines on the approval card; ⌥Return sends ticked choices (like their Send button);
+    /// ⌘Return does what "Open Nod" does, on every card. ⌥Return approves (not a shortened approval, which is reviewed in Nod) and ⌥⌫ declines on the approval card; ⌥Return sends ticked choices (like their Send button);
     /// ⌘. stops a running turn; ⇧⌘C copies the answer on show (⌘C stays with the selection). Plain Return never
     /// approves and keeps ticking choices.
     /// The app asks only while the island has the keyboard, and Approve and Decline still wait out `answerGuard`.
     public static func keyAction(_ key: CardKey, _ modifier: KeyModifier, offers: CardOffers) -> KeyAction? {
         switch (key, modifier) {
         case (.returnKey, .command): .openNod
-        case (.returnKey, .option): offers.approval ? .approve : offers.picks ? .sendPicks : nil
+        case (.returnKey, .option): offers.approval ? (offers.approvable ? .approve : nil) : offers.picks ? .sendPicks : nil
         case (.delete, .option): offers.approval ? .decline : nil
         case (.period, .command): offers.stop ? .stop : nil
         case (.c, .commandShift): offers.answer ? .copyAnswer : nil
@@ -339,8 +341,104 @@ public enum IslandPresentation {
     /// Under the prompt for a moment after ⇧⌘C or "Copy answer", and what VoiceOver hears.
     public static let answerCopied = "Answer copied"
 
-    /// The approval card's quiet key line.
-    public static let approvalHints = "⌥↩ approve  ·  ⌥⌫ decline  ·  esc close"
+    /// The approval card's quiet key line. A shortened approval has no approve key: ⌘↩ reviews it in Nod.
+    public static func approvalHints(approvable: Bool = true) -> String {
+        approvable ? "⌥↩ approve  ·  ⌥⌫ decline  ·  esc close" : "⌘↩ review in Nod  ·  ⌥⌫ decline  ·  esc close"
+    }
+
+    /// What the shortened approval's notice says: the preview is not all of it, and approving happens in Nod.
+    public static let shortenedNotice = "Nod shortened this text. Review the full text in Nod and approve it there."
+    public static let reviewInNod = "Review in Nod"
+    /// Shown when Approve is asked for a shortened approval anyway (a stray call, never a button).
+    public static let cannotApproveShortened = "Nod shortened this text. Review it in Nod to approve it."
+
+    // MARK: Where "Open Nod" goes
+
+    /// A page of Nod's own window that matches what the card shows. Nod has no links to one message, approval or task:
+    /// these are the pages that exist (Nod 915e4f1 and d350d43), nothing more specific is made up.
+    public enum NodPage: Equatable, Sendable {
+        /// The main conversation: pending approvals and questions, results and follow-ups.
+        case chat
+        /// The scheduled tasks page, for a task the card names.
+        case tasks
+
+        public var path: String { self == .chat ? "/" : "/tasks" }
+    }
+
+    /// The page "Open Nod" and ⌘Return go to for the card on show; nil when the card shows nothing in particular
+    /// (the empty prompt, offline, a failure), which opens Nod the way Settings says.
+    /// `prompt`: the card is the quick prompt; `answerShown`: an answer or question sits above its field.
+    public static func openPage(_ state: IslandState, prompt: Bool, answerShown: Bool) -> NodPage? {
+        if case .needsYou = state { return .chat }
+        if prompt { return answerShown ? .chat : nil }
+        switch state {
+        case .working(let activity): return activity.taskID == nil ? .chat : .tasks
+        case .asks, .done: return .chat
+        case .offline, .rest, .failed, .needsYou: return nil
+        }
+    }
+
+    // MARK: The drop tray's destination
+
+    /// What the drop tray says about where files go, before they are released. Built from the session's address only:
+    /// host and port, never a credential.
+    public struct DropDestination: Equatable, Sendable {
+        public enum Place: Equatable, Sendable { case thisMac, remote }
+        public enum Readiness: Equatable, Sendable { case ready, connecting, offline, notConfigured }
+
+        /// Nil without a configured session.
+        public var place: Place?
+        /// "localhost:4310", "[::1]:4310", "nod.example.com:443"; nil without a configured session.
+        public var address: String?
+        public var readiness: Readiness
+
+        /// Files will upload as soon as they are released.
+        public var uploads: Bool { readiness == .ready }
+
+        /// "Nod on this Mac · localhost:4310" or "Remote Nod · nod.example.com:443".
+        public var destination: String? {
+            guard let place, let address else { return nil }
+            return (place == .thisMac ? "Nod on this Mac" : "Remote Nod") + " · " + address
+        }
+
+        /// The sentence under it: how it goes on, or the next step when files could not go anywhere.
+        public var note: String {
+            switch readiness {
+            case .ready: "They upload right away. Nothing is sent until Return."
+            case .connecting: "Still connecting. Files can’t upload until Nod answers."
+            case .offline: "Nod isn’t connected. Files can’t upload until it is."
+            case .notConfigured: "nodch has no Nod to upload to yet. Add its address in nodch Settings first."
+            }
+        }
+
+        /// What VoiceOver hears for the tray.
+        public var spoken: String {
+            guard let place, let address else { return "Drop files for Nod. " + note }
+            let port = address.split(separator: ":").last.map(String.init) ?? ""
+            let host = address.dropLast(port.count + 1)
+            let at = (place == .thisMac ? "Nod on this Mac" : "Remote Nod") + " at \(host), port \(port)"
+            return "Drop files for Nod. " + at + ". " + note
+        }
+    }
+
+    /// `server`: the address of the session (`IslandStore.server`), nil without one. Offline, the files could not
+    /// upload now, so the tray says so instead of promising it.
+    public static func dropDestination(server: URL?, state: IslandState, connecting: Bool) -> DropDestination {
+        guard let server, let address = hostAndPort(server) else { return .init(place: nil, address: nil, readiness: .notConfigured) }
+        let place: DropDestination.Place = OpenTarget.isLoopback(server) ? .thisMac : .remote
+        var readiness = DropDestination.Readiness.ready
+        if case .offline = state { readiness = connecting ? .connecting : .offline }
+        return .init(place: place, address: address, readiness: readiness)
+    }
+
+    /// "host:port", with the scheme's default port spelled out and IPv6 hosts in brackets. Only the host and the port
+    /// of `url` are used: a user name, password or path never shows.
+    public static func hostAndPort(_ url: URL) -> String? {
+        guard let host = url.host, !host.isEmpty else { return nil }
+        let port = url.port ?? (url.scheme?.lowercased() == "https" ? 443 : 80)
+        let shown = host.contains(":") && !host.hasPrefix("[") ? "[\(host)]" : host
+        return "\(shown):\(port)"
+    }
 
     public enum Reaction: Equatable, Sendable { case none, reveal, conceal }
 

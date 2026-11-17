@@ -16,5 +16,6 @@ import NodchCore
         promiseDrops()
         answerReady()
         targets()
+        handoff()
     }
 }
