@@ -12,7 +12,7 @@ working on. It does a few things and hands everything else to Nod:
 
 - **Ask.** <kbd>⌥ Space</kbd> opens a prompt and starts listening. Speak, and your words appear as you say them; type,
   and the microphone steps aside. Drag files toward the notch and the island opens into a drop target for them.
-- **Follow.** While Nod works, the island shows the current step and a timer, with a Stop button.
+- **Follow.** While Nod works, the island shows the current step and a timer, with a button to stop the task or stop all work.
 - **Read.** When Nod finishes while the island is closed, it says **Answer ready** until you open it. The answer
   shows in full, with its formatting, above the prompt, so you can follow up.
 - **Answer.** When Nod asks you something, its choices are buttons and the keyboard is already in nodch: pick with
@@ -52,7 +52,7 @@ Right-click the island for **Settings…**, **Start at login** and **Quit nodch*
 | <kbd>↑</kbd> <kbd>↓</kbd>, <kbd>Return</kbd> | Nod's question | Move between choices, pick one |
 | <kbd>⌥ Return</kbd> | approval / question | Approve, or send the ticked choices |
 | <kbd>⌥ ⌫</kbd> | approval | Decline |
-| <kbd>⌘ .</kbd> | while Nod works | Stop |
+| <kbd>⌘ .</kbd> | while Nod works | Stop the displayed task, or stop all work when nodch shows the main conversation |
 | <kbd>⇧ ⌘ C</kbd> | under an answer | Copy the whole answer (or right-click it) |
 | <kbd>⌘ Return</kbd> | any card | Open the Nod app |
 | <kbd>⌘ ,</kbd> / <kbd>⌘ Q</kbd> | any card | Settings / Quit |
