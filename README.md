@@ -37,8 +37,9 @@ to it.
 1. Download `Nodch-<version>.zip` from the [latest release](https://github.com/tschnorpfeil/nodch/releases/latest),
    unzip it and move **Nodch** to Applications. The app is signed and notarized.
 2. Open it. If nodch can't reach Nod at `http://localhost:4310`, its Settings open: enter the address you open Nod at
-   and, for the self-host stack, the token (`NOD_AUTH_TOKEN` in Nod's `.env`). **Test connection**, then **Save**.
-3. Press <kbd>⌥ Space</kbd>. The first time, macOS asks for the microphone.
+   and, if set, the server token (`NOD_AUTH_TOKEN` in Nod's `.env`). **Test connection**, then **Save**. For a source
+   checkout that uses an access key, follow the launch instructions under [Build from source](#build-from-source).
+3. Press the shortcut shown in Settings (default <kbd>⌥ Space</kbd>). The first time, macOS asks for the microphone.
 
 Right-click the island for **Settings…**, **Start at login** and **Quit nodch**.
 
@@ -113,8 +114,13 @@ Environment variables override Settings, which is handy for scripts and LaunchAg
 NOD_URL=http://localhost:4310 NOD_AUTH_TOKEN=<token> swift run --package-path app Nodch
 ```
 
-`NOD_DATA_ROOT=<nod>/.local` reads the access key of a Nod run from source instead of a token. With a token in the
-environment, **Save on this Mac** in Settings keeps the connection for starts without it.
+For a Nod run from source with an access key, give nodch the server address and Nod's data directory:
+
+```sh
+env -u NOD_AUTH_TOKEN NOD_URL=http://localhost:4310 NOD_DATA_ROOT="/path/to/nod/.local" swift run --package-path app Nodch
+```
+
+With a server token in the environment, **Save on this Mac** in Settings keeps the connection for starts without it.
 
 Without a Nod at hand:
 

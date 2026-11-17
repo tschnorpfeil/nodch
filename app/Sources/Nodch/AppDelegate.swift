@@ -67,9 +67,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// First run: nothing set or saved, and nothing answers at the default address (or it wants a token). One GET.
     private func openSettingsOnFirstRun(_ resolved: ResolvedConnection) {
+        guard let stamp = settingsModel?.firstRunStamp else { return }
         Task { [weak self] in
             let check = await ConnectionCheck.run(resolved.configuration)
-            guard ConnectionSettings.opensSettingsAtLaunch(source: resolved.source, check: check) else { return }
+            guard ConnectionSettings.opensSettingsAtLaunch(source: resolved.source, check: check),
+                  self?.settingsModel?.showFirstRun(check, address: resolved.address, since: stamp) == true else { return }
             self?.settingsWindow?.show()
         }
     }

@@ -76,10 +76,15 @@ struct SettingsView: View {
 
     private var connectionSection: some View {
         Section {
+            if model.showsFirstRunLead { firstRunGuidance }
             TextField("Server", text: $model.server, prompt: Text(verbatim: ConnectionCheck.display(ConnectionSettings.defaultURL)))
                 .textContentType(.URL)
                 .autocorrectionDisabled()
             tokenRow
+            if let next = model.firstRunNextStep {
+                Text(next).font(.callout).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             HStack(spacing: 10) {
                 Spacer(minLength: 0)
                 Button("Test connection") { model.runTest() }
@@ -93,11 +98,23 @@ struct SettingsView: View {
         } header: {
             Text("Nod")
         } footer: {
-            Text("Use the address you open Nod at, for example http://localhost:4310. If your Nod uses a token, it is the NOD_AUTH_TOKEN in Nod’s .env.")
-                .font(.caption).foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Use the address you open Nod at, for example http://localhost:4310. If set, the server token is NOD_AUTH_TOKEN in Nod’s .env.")
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Link("Source access-key setup (NOD_URL and NOD_DATA_ROOT)",
+                     destination: URL(string: "https://github.com/tschnorpfeil/nodch#build-from-source")!)
+            }
+            .font(.caption)
         }
         .disabled(model.usesEnvironment)
+    }
+
+    private var firstRunGuidance: some View {
+        Text("Connect to a Nod server you run from source or self-host. The Nod desktop app’s built-in server is private.")
+            .font(.callout)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     /// Not in the connection section: it works while the environment decides the connection.
@@ -190,7 +207,7 @@ struct SettingsView: View {
                 }
             }
         } else {
-            SecureField("Token", text: $model.tokenEntry, prompt: Text(model.usesEnvironment ? "Set by the environment" : model.removing ? "Removed when you save" : "Optional"))
+            SecureField("Token", text: $model.tokenEntry, prompt: Text(model.usesEnvironment ? "Set by the environment" : model.removing ? "Removed when you save" : "If Nod asks"))
             if model.removing {
                 HStack {
                     Spacer()
@@ -207,9 +224,12 @@ struct SettingsView: View {
                 if saved.isEmpty {
                     switch model.savedCheck {
                     case .done(let check, let address):
-                        status(check.savedMessage(address: address),
-                               symbol: check == .connected ? "checkmark.circle.fill" : "exclamationmark.triangle.fill",
-                               color: check == .connected ? .green : .red)
+                        VStack(alignment: .leading, spacing: 4) {
+                            status(check.savedMessage(address: address),
+                                   symbol: check == .connected ? "checkmark.circle.fill" : "exclamationmark.triangle.fill",
+                                   color: check == .connected ? .green : .red)
+                            if check == .connected { askHint }
+                        }
                     case .checking, nil:
                         HStack(spacing: 6) { ProgressView().controlSize(.small); Text("Saved. Trying the connection…").foregroundStyle(.secondary) }
                     }
@@ -220,11 +240,23 @@ struct SettingsView: View {
         case .testing:
             HStack(spacing: 6) { ProgressView().controlSize(.small); Text("Testing…").foregroundStyle(.secondary) }
         case .done(.connected, _):
-            status("Connected", symbol: "checkmark.circle.fill", color: .green)
+            VStack(alignment: .leading, spacing: 4) {
+                status("Connected", symbol: "checkmark.circle.fill", color: .green)
+                if model.needsSave {
+                    Text("Click Save to keep it.").font(.callout).foregroundStyle(.secondary)
+                } else { askHint }
+            }
         case .done(let check, let address):
-            status(check.message(address: address, inSettings: true), symbol: "exclamationmark.triangle.fill", color: .red)
+            status(SettingsModel.connectionIssue(check, address: address),
+                   symbol: "exclamationmark.triangle.fill", color: .red)
         case .invalid(let reason):
             status(reason, symbol: "exclamationmark.triangle.fill", color: .red)
+        }
+    }
+
+    @ViewBuilder private var askHint: some View {
+        if let hint = model.askHint {
+            Text(hint).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }
     }
 

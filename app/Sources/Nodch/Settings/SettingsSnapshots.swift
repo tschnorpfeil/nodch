@@ -29,6 +29,10 @@ enum SettingsSnapshots {
         var saved = false
         var tokenEntry = ""
         var test = SettingsModel.Test.idle
+        /// Launch check that opened Settings at the first run.
+        var firstRun: ConnectionCheck?
+        /// Save is pressed and the saved connection answers with this.
+        var savedCheck: ConnectionCheck?
         var login = SMAppService.Status.notRegistered
         /// What became of the shortcut, without the real hot key.
         var hotkey = HotkeyStatus.on(.standard)
@@ -40,6 +44,14 @@ enum SettingsSnapshots {
         Scene(name: "settings-first-run"),
         Scene(name: "settings-saved-token", server: "http://localhost:4310", storedToken: true,
               test: .done(.connected, address: ConnectionSettings.defaultURL), login: .enabled),
+        Scene(name: "settings-first-run-unreachable", firstRun: .unreachable),
+        Scene(name: "settings-first-run-token", firstRun: .tokenRequired),
+        Scene(name: "settings-first-run-tested", test: .done(.connected, address: ConnectionSettings.defaultURL), firstRun: .tokenRequired),
+        Scene(name: "settings-saved-connected", server: "http://localhost:4310", storedToken: true, savedCheck: .connected),
+        Scene(name: "settings-saved-connected-shortcut-off", server: "http://localhost:4310", storedToken: true,
+              savedCheck: .connected, hotkey: .off),
+        Scene(name: "settings-saved-connected-shortcut-taken", server: "http://localhost:4310", storedToken: true,
+              savedCheck: .connected, hotkey: .takenByApp(.standard)),
         Scene(name: "settings-environment", environment: ["NOD_URL": "http://localhost:4310", "NOD_AUTH_TOKEN": "snapshot"],
               login: .requiresApproval),
         Scene(name: "settings-environment-kept", environment: ["NOD_URL": "http://localhost:4310", "NOD_AUTH_TOKEN": "snapshot"],
@@ -74,10 +86,21 @@ enum SettingsSnapshots {
         let settings = ConnectionSettings(defaults: defaults, tokens: tokens)
         let commands = AppCommands(loginItem: FixedLoginItem(scene.login))
         let model = SettingsModel(settings: settings, commands: commands, environment: scene.environment)
-        model.tester = { _ in .unreachable }
+        let answer = scene.savedCheck ?? .unreachable
+        model.tester = { _ in answer }
         model.server = scene.server
         model.tokenEntry = scene.tokenEntry
-        model.test = scene.test
+        if let check = scene.firstRun {
+            model.showFirstRun(check, address: ConnectionSettings.defaultURL, since: model.firstRunStamp)
+        }
+        if scene.firstRun != nil, case .done(let check, _) = scene.test {
+            model.tester = { _ in check }
+            model.runTest()
+        } else {
+            model.test = scene.test
+        }
+        // The real Save path: it writes only the in-memory stores and tries the saved connection with `tester`.
+        if scene.savedCheck != nil { model.save() }
         model.speechLanguages = scene.languages
         model.supportedLanguages = { [] }
         model.currentHotkey = { scene.hotkey }
