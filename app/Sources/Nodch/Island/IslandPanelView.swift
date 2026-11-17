@@ -48,16 +48,21 @@ struct IslandPanelView: View {
         .onChange(of: model.focusToken) { if model.showsPrompt { promptFocused = true } }
     }
 
-    /// Files over the open card: it lights up as one target.
+    /// Files over an open card: show the same destination and timing as the drop tray.
     private func dropHighlight(_ layout: IslandModel.Layout) -> some View {
         let shape = RoundedRectangle(cornerRadius: IslandGeometry.cornerRadius - 6, style: .continuous)
-        return shape.fill(IslandStyle.accent.opacity(0.1))
+        return shape.fill(.black.opacity(0.93))
             .overlay(shape.strokeBorder(IslandStyle.accent.opacity(0.9), lineWidth: 1.5))
+            .overlay {
+                IslandDropDetails(destination: model.dropDestination)
+                    .padding(10)
+            }
             // At the notch the ring starts just below the menu bar row, clear of the field.
             .padding(.top, layout.notch ? max(0, layout.rowHeight - 4) : 0)
             .padding(6)
             .allowsHitTesting(false)
-            .accessibilityHidden(true)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(model.dropDestination.spoken)
     }
 
     private var heading: String {
@@ -145,6 +150,26 @@ struct IslandDropTray: View {
                 .padding(.bottom, 2)
             Text("Drop files for Nod")
                 .font(IslandStyle.title).foregroundStyle(IslandStyle.white(IslandStyle.primary))
+            IslandDropDetails(destination: destination)
+        }
+        .multilineTextAlignment(.center)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, lit ? 30 : 24).padding(.horizontal, IslandStyle.padding)
+        .background(shape.fill(lit ? IslandStyle.accent.opacity(0.14) : IslandStyle.white(0.06)))
+        .overlay(shape.strokeBorder(lit ? IslandStyle.accent : IslandStyle.white(0.18),
+                                    style: StrokeStyle(lineWidth: lit ? 1.5 : 1, dash: lit ? [] : [5, 4])))
+        .animation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.8), value: lit)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(lit ? "Release to attach the files for Nod. " + destination.spoken : destination.spoken)
+    }
+}
+
+/// The server and timing shown wherever files can be released.
+private struct IslandDropDetails: View {
+    let destination: IslandPresentation.DropDestination
+
+    var body: some View {
+        VStack(spacing: 5) {
             if let line = destination.destination {
                 HStack(spacing: 5) {
                     Image(systemName: destination.place == .thisMac ? "laptopcomputer" : "network")
@@ -158,14 +183,6 @@ struct IslandDropTray: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .multilineTextAlignment(.center)
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, lit ? 30 : 24).padding(.horizontal, IslandStyle.padding)
-        .background(shape.fill(lit ? IslandStyle.accent.opacity(0.14) : IslandStyle.white(0.06)))
-        .overlay(shape.strokeBorder(lit ? IslandStyle.accent : IslandStyle.white(0.18),
-                                    style: StrokeStyle(lineWidth: lit ? 1.5 : 1, dash: lit ? [] : [5, 4])))
-        .animation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.8), value: lit)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(lit ? "Release to attach the files for Nod. " + destination.spoken : destination.spoken)
     }
 }
 

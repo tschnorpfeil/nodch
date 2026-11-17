@@ -79,7 +79,8 @@ too.
   the browser otherwise. Opening work, a decision or a result uses the connected server in the browser, since the
   Nod app keeps its own server setting.
 - The token is kept in your login Keychain; the address in nodch's preferences.
-- The drop tray shows the destination host and port. A file you drop uploads to that Nod right away, before you press Return.
+- While you drag over the island, it shows the destination host and port. A file you drop uploads to that Nod right
+  away, before you press Return.
 - See [SECURITY.md](SECURITY.md) for details and how to report a problem.
 
 ## Troubleshooting

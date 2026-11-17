@@ -370,7 +370,7 @@ public enum IslandPresentation {
     /// `prompt`: the card is the quick prompt; `answerShown`: an answer or question sits above its field.
     public static func openPage(_ state: IslandState, prompt: Bool, answerShown: Bool) -> NodPage? {
         if case .needsYou = state { return .chat }
-        if prompt { return answerShown ? .chat : nil }
+        if prompt, answerShown { return .chat }
         switch state {
         case .working(let activity): return activity.taskID == nil ? .chat : .tasks
         case .asks, .done: return .chat

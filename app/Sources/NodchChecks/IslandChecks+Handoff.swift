@@ -75,8 +75,10 @@ extension IslandChecks {
               "open: a question, a result and a follow-up open the main chat")
         check(page(activity("00000000-0000-4000-8000-00000000d0c1"), false, false) == .tasks && page(activity(nil), false, false) == .chat,
               "open: a working card with a task id opens Scheduled tasks, unnamed work the main chat")
-        check(page(activity("00000000-0000-4000-8000-00000000d0c1"), true, false) == nil,
-              "open: the prompt over a task shows no task, so it opens Nod as Settings says")
+        check(page(activity("00000000-0000-4000-8000-00000000d0c1"), true, false) == .tasks
+              && page(activity(nil), true, false) == .chat
+              && page(activity("00000000-0000-4000-8000-00000000d0c1"), true, true) == .chat,
+              "open: the working prompt opens the work unless it shows an answer in Chat")
         check(page(.rest, true, false) == nil && page(offline, false, false) == nil && page(.failed(message: "x"), false, false) == nil
               && page(.rest, false, false) == nil, "open: an empty prompt, offline and a failure open Nod as Settings says")
         check(P.NodPage.chat.path == "/" && P.NodPage.tasks.path == "/tasks", "open: only pages Nod has")

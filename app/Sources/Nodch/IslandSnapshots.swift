@@ -82,6 +82,8 @@ enum IslandSnapshots {
         Scene(name: "drop-near", state: .rest, drop: .near),
         Scene(name: "drop-over", state: IslandSamples.working(), drop: .over),
         Scene(name: "drop-open", state: .rest, open: true, prompt: IslandSamples.attachments, drop: .over),
+        Scene(name: "drop-over-working-card", state: IslandSamples.working(taskID: IslandSamples.taskID),
+              open: true, drop: .over, server: IslandSamples.remoteServer),
         Scene(name: "drop-tray", state: .rest, open: true, drop: .near, tray: true),
         Scene(name: "drop-tray-over", state: IslandSamples.working(), open: true, drop: .over, tray: true),
         Scene(name: "drop-tray-remote", state: .rest, open: true, drop: .near, tray: true, server: IslandSamples.remoteServer),
