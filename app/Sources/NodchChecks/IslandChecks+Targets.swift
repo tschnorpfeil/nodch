@@ -13,8 +13,8 @@ extension IslandChecks {
         let chat = WorkActivity(title: nil, step: nil, site: nil, since: now, doing: .model)
         let background = WorkActivity(title: "Watch prices", step: nil, site: nil, since: now, doing: .tool, taskID: task)
         check(chat.stopScope == .thread && background.stopScope == .task(task), "stop: a task stops on its own, the chat's turn stops all work")
-        check(WorkActivity(title: nil, step: nil, site: nil, since: now, doing: .model, taskID: "").stopScope == .thread,
-              "stop: an empty task id is no task")
+        check(WorkActivity(title: nil, step: nil, site: nil, since: now, doing: .model, taskID: "").stopScope == .task(""),
+              "stop: an empty task id is refused as a task, never widened to all work")
         check(WorkActivity(title: nil, step: nil, site: nil, since: now, doing: .model, taskID: "not-a-uuid").stopScope == .task("not-a-uuid"),
               "stop: an id Nod would refuse stays a task stop, never widened to all work")
         check(P.stopName(.thread) == "Stop all work" && P.stopName(.thread, short: true) == "Stop all work",
@@ -43,6 +43,18 @@ extension IslandChecks {
               "targets: a called-off send keeps the original words and says why")
         check(dictated.submit(to: .question("q2")) == [.send(prompt: "next week", attachments: [], target: .question("q2"))],
               "targets: Return again sends once to what the card shows now")
+
+        // A file attached after Return must not silently turn the answer into a different kind of send.
+        var withLateFile = PromptDraft(text: "next week")
+        _ = withLateFile.open(.hotkey)
+        withLateFile.voiceStarted()
+        _ = withLateFile.submit(to: .question("q1"))
+        let dropped = URL(fileURLWithPath: "/tmp/nodch-checks/late.pdf")
+        let lateFile = NodAttachment(id: "late", name: "late.pdf", mimeType: "application/pdf", size: 1)
+        _ = withLateFile.drop([.init(url: dropped, isDirectory: false)])
+        withLateFile.uploaded(1, as: lateFile)
+        check(withLateFile.voiceFinished() == [.send(prompt: "next week", attachments: [lateFile], target: .question("q1"))],
+              "targets: a late file cannot change the captured question into a new message")
 
         // A Return that never went out leaves no target behind.
         var edited = PromptDraft()

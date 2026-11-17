@@ -709,7 +709,7 @@ struct IslandStatusCard: View {
             HStack(spacing: IslandStyle.buttonGap) {
                 IslandOpenButton(model: model)
                 Spacer(minLength: 0)
-                Button { model.stop() } label: {
+                Button { model.stop(scope) } label: {
                     HStack(spacing: 6) {
                         if model.stopping { ProgressView().controlSize(.mini) } else {
                             RoundedRectangle(cornerRadius: 1.5).frame(width: 8, height: 8)

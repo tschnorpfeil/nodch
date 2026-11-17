@@ -75,6 +75,7 @@ import Observation
         var wing = IslandWing()
         var line = ""
         var since: Date?
+        var stopScope: StopScope?
         /// Done: how long the turn took, when worth saying.
         var took: TimeInterval?
         /// Files are dragged toward (or over) the closed island.
@@ -187,8 +188,8 @@ import Observation
     /// Stops what the island shows: that activity's task, or all of the thread's work when it has none. Nothing
     /// without a running activity (a wing still shrinking from "working" keeps its Stop for a moment). A failure is
     /// shown, never retried or widened to all work.
-    func stop() {
-        guard !stopping, let scope = activity?.stopScope else { return }
+    func stop(_ scope: StopScope) {
+        guard !stopping, activity?.stopScope == scope else { return }
         guard let actions = store.actions else { actionError = Self.notConnected; return }
         stopping = true
         actionError = nil

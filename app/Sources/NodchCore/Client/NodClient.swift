@@ -158,8 +158,8 @@ public final class NodClient: Sendable {
         switch scope {
         case .thread: path = "/api/thread/stop"
         case .task(let id):
-            guard let id = StopScope.validTaskID(id) else { throw NodClientError.invalidInput("This task can’t be stopped from nodch.") }
-            path = "/api/tasks/\(id)/stop"
+            guard let id = UUID(uuidString: id) else { throw NodClientError.invalidInput("This task can’t be stopped from nodch.") }
+            path = "/api/tasks/\(id.uuidString.lowercased())/stop"
         }
         var request = try configuration.request(path: path, method: "POST")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")

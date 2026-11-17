@@ -18,7 +18,7 @@ public struct WorkActivity: Equatable, Sendable {
 
     public init(title: String?, step: String?, site: String?, since: Date, doing: Doing, taskID: String? = nil) {
         self.title = title; self.step = step; self.site = site; self.since = since; self.doing = doing
-        self.taskID = taskID?.isEmpty == false ? taskID : nil
+        self.taskID = taskID
     }
 
     /// What Stop stops for this activity: the task on show, or all of the thread's work when it has no task.
@@ -31,11 +31,6 @@ public struct WorkActivity: Equatable, Sendable {
 public enum StopScope: Equatable, Sendable {
     case task(String)
     case thread
-
-    /// Nod parses the route's id with `z.uuid()`; anything else is not a task id nodch sends.
-    public static func validTaskID(_ id: String) -> String? {
-        UUID(uuidString: id) != nil ? id.lowercased() : nil
-    }
 }
 
 /// A pending approval, mapped from Nod's `MessageApproval` with `state == "pending"`.

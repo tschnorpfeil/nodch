@@ -176,8 +176,8 @@ public enum IslandPresentation {
 
     /// Return was meant for one question (or a new message) and the card now shows another, or nodch switched Nod:
     /// nothing goes out, the words stay, and this shows under the field.
-    public static let targetChanged = "Nod’s question changed while your words were coming in, so nothing was sent. Check them and press Return again."
-    public static let serverChanged = "nodch switched to another Nod while your words were coming in, so nothing was sent. Press Return to send them there."
+    public static let targetChanged = "What Nod would receive changed while dictation was finishing. Check your draft and press Return again."
+    public static let serverChanged = "The Nod connection changed while dictation was finishing. Check your draft and press Return to send it."
 
     /// Stop's words: the task on show, or everything the thread runs (Nod's thread stop). `short` is the button text.
     public static func stopName(_ scope: StopScope, short: Bool = false) -> String {

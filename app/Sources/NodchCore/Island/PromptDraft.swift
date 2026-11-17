@@ -290,7 +290,7 @@ public struct PromptDraft: Equatable, Sendable {
         nextID += 1
         error = nil
         notice = nil
-        return [.send(prompt: prompt, attachments: files, target: files.isEmpty ? target : .message)]
+        return [.send(prompt: prompt, attachments: files, target: target)]
     }
 
     /// A click on one of Nod's choices goes out like a send: the microphone goes off (its words stay), the field and
