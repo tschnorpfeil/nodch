@@ -58,6 +58,11 @@ import ServiceManagement
     @ObservationIgnored var onSaved: () -> Void = {}
     @ObservationIgnored private var testRun = 0
 
+    /// Settings opened by itself at the first run: the guidance leads the connection section.
+    private(set) var firstRunLead = false
+    /// Why the first-run launch check failed. Valid only until the person tests, saves or edits (see `testRun`).
+    private var firstRunFailure: (check: ConnectionCheck, address: URL, run: Int)?
+
     /// The shortcut asked for and what became of it.
     private(set) var hotkey = HotkeyStatus.on(.standard)
     /// Why the shortcut does not work: at launch, or the one just chosen, which was then not kept.
@@ -125,6 +130,40 @@ import ServiceManagement
     /// A token being typed stays visible (as dots) in its field, also after the address changes: it is the one Test
     /// and Save use, never one hidden behind "Saved in Keychain".
     var showsStoredToken: Bool { storedToken && !removing && tokenEntry.isEmpty }
+
+    /// Taken before the launch check starts: its result applies only if nothing was tested, saved or edited since.
+    var firstRunStamp: Int { testRun }
+
+    /// Default first run opens Settings: lead with what Nod must be, and keep the launch check's reason when it is
+    /// still current. Writes nothing.
+    func showFirstRun(_ check: ConnectionCheck, address: URL, since stamp: Int) {
+        guard !usesEnvironment else { return }
+        firstRunLead = true
+        if stamp == testRun, test == .idle, saved == nil { firstRunFailure = (check, address, testRun) }
+    }
+
+    /// The next step after the launch check failed, in the words of the check; nil once the person has acted.
+    var firstRunNextStep: String? {
+        guard let failure = firstRunFailure, failure.run == testRun, test == .idle, saved == nil else { return nil }
+        return failure.check.message(address: failure.address, inSettings: true) + " Then test the connection."
+    }
+
+    /// The guidance goes once the saved connection works.
+    var showsFirstRunLead: Bool {
+        if case .done(.connected, _) = savedCheck { return false }
+        return firstRunLead
+    }
+
+    /// The fields differ from what is saved, so a good test is not yet a kept connection.
+    var needsSave: Bool {
+        guard let address = currentAddress else { return true }
+        return tokenChange != .keep || settings.savedServer != address
+    }
+
+    /// How to ask once connected: the registered shortcut, or the notch when it is off or not registered.
+    var askHint: String {
+        hotkey.inEffect.map { "Press \($0.display) to ask Nod." } ?? "Click the notch to ask Nod."
+    }
 
     /// A test still running belongs to inputs that are gone: its result is dropped.
     private func resetTest() {

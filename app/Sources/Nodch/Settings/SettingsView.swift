@@ -76,6 +76,7 @@ struct SettingsView: View {
 
     private var connectionSection: some View {
         Section {
+            if model.showsFirstRunLead { firstRunGuidance }
             TextField("Server", text: $model.server, prompt: Text(verbatim: ConnectionCheck.display(ConnectionSettings.defaultURL)))
                 .textContentType(.URL)
                 .autocorrectionDisabled()
@@ -98,6 +99,18 @@ struct SettingsView: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .disabled(model.usesEnvironment)
+    }
+
+    private var firstRunGuidance: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("nodch works with a Nod you run from source or self-host. The stock Nod desktop app alone keeps its connection private, so nodch cannot reach it.")
+                .fixedSize(horizontal: false, vertical: true)
+            if let next = model.firstRunNextStep {
+                Text(next).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .font(.callout)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     /// Not in the connection section: it works while the environment decides the connection.
@@ -207,9 +220,12 @@ struct SettingsView: View {
                 if saved.isEmpty {
                     switch model.savedCheck {
                     case .done(let check, let address):
-                        status(check.savedMessage(address: address),
-                               symbol: check == .connected ? "checkmark.circle.fill" : "exclamationmark.triangle.fill",
-                               color: check == .connected ? .green : .red)
+                        VStack(alignment: .leading, spacing: 4) {
+                            status(check.savedMessage(address: address),
+                                   symbol: check == .connected ? "checkmark.circle.fill" : "exclamationmark.triangle.fill",
+                                   color: check == .connected ? .green : .red)
+                            if check == .connected { askHint }
+                        }
                     case .checking, nil:
                         HStack(spacing: 6) { ProgressView().controlSize(.small); Text("Saved. Trying the connection…").foregroundStyle(.secondary) }
                     }
@@ -220,12 +236,21 @@ struct SettingsView: View {
         case .testing:
             HStack(spacing: 6) { ProgressView().controlSize(.small); Text("Testing…").foregroundStyle(.secondary) }
         case .done(.connected, _):
-            status("Connected", symbol: "checkmark.circle.fill", color: .green)
+            VStack(alignment: .leading, spacing: 4) {
+                status("Connected", symbol: "checkmark.circle.fill", color: .green)
+                if model.needsSave {
+                    Text("Click Save to keep it.").font(.callout).foregroundStyle(.secondary)
+                } else { askHint }
+            }
         case .done(let check, let address):
             status(check.message(address: address, inSettings: true), symbol: "exclamationmark.triangle.fill", color: .red)
         case .invalid(let reason):
             status(reason, symbol: "exclamationmark.triangle.fill", color: .red)
         }
+    }
+
+    private var askHint: some View {
+        Text(model.askHint).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
     }
 
     private func status(_ text: String, symbol: String, color: Color) -> some View {
