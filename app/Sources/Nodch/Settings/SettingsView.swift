@@ -81,6 +81,10 @@ struct SettingsView: View {
                 .textContentType(.URL)
                 .autocorrectionDisabled()
             tokenRow
+            if let next = model.firstRunNextStep {
+                Text(next).font(.callout).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             HStack(spacing: 10) {
                 Spacer(minLength: 0)
                 Button("Test connection") { model.runTest() }
@@ -102,15 +106,10 @@ struct SettingsView: View {
     }
 
     private var firstRunGuidance: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("nodch works with a Nod you run from source or self-host. The stock Nod desktop app alone keeps its connection private, so nodch cannot reach it.")
-                .fixedSize(horizontal: false, vertical: true)
-            if let next = model.firstRunNextStep {
-                Text(next).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .font(.callout)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        Text("Connect to a Nod server you run from source or self-host. The Nod desktop app’s built-in server is private.")
+            .font(.callout)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     /// Not in the connection section: it works while the environment decides the connection.
@@ -203,7 +202,7 @@ struct SettingsView: View {
                 }
             }
         } else {
-            SecureField("Token", text: $model.tokenEntry, prompt: Text(model.usesEnvironment ? "Set by the environment" : model.removing ? "Removed when you save" : "Optional"))
+            SecureField("Token", text: $model.tokenEntry, prompt: Text(model.usesEnvironment ? "Set by the environment" : model.removing ? "Removed when you save" : "If Nod asks"))
             if model.removing {
                 HStack {
                     Spacer()

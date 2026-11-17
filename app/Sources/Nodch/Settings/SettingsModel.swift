@@ -60,8 +60,8 @@ import ServiceManagement
 
     /// Settings opened by itself at the first run: the guidance leads the connection section.
     private(set) var firstRunLead = false
-    /// Why the first-run launch check failed. Valid only until the person tests, saves or edits (see `testRun`).
-    private var firstRunFailure: (check: ConnectionCheck, address: URL, run: Int)?
+    /// The first action to take, until the person edits or checks the connection.
+    private(set) var firstRunNextStep: String?
 
     /// The shortcut asked for and what became of it.
     private(set) var hotkey = HotkeyStatus.on(.standard)
@@ -134,18 +134,13 @@ import ServiceManagement
     /// Taken before the launch check starts: its result applies only if nothing was tested, saved or edited since.
     var firstRunStamp: Int { testRun }
 
-    /// Default first run opens Settings: lead with what Nod must be, and keep the launch check's reason when it is
-    /// still current. Writes nothing.
-    func showFirstRun(_ check: ConnectionCheck, address: URL, since stamp: Int) {
-        guard !usesEnvironment else { return }
+    /// Show the launch failure only if the person has not already edited or checked the connection.
+    @discardableResult
+    func showFirstRun(_ check: ConnectionCheck, address: URL, since stamp: Int) -> Bool {
+        guard !usesEnvironment, stamp == testRun, test == .idle, saved == nil else { return false }
         firstRunLead = true
-        if stamp == testRun, test == .idle, saved == nil { firstRunFailure = (check, address, testRun) }
-    }
-
-    /// The next step after the launch check failed, in the words of the check; nil once the person has acted.
-    var firstRunNextStep: String? {
-        guard let failure = firstRunFailure, failure.run == testRun, test == .idle, saved == nil else { return nil }
-        return failure.check.message(address: failure.address, inSettings: true) + " Then test the connection."
+        firstRunNextStep = check.message(address: address, inSettings: true) + " Then test the connection."
+        return true
     }
 
     /// The guidance goes once the saved connection works.
@@ -160,9 +155,9 @@ import ServiceManagement
         return tokenChange != .keep || settings.savedServer != address
     }
 
-    /// How to ask once connected: the registered shortcut, or the notch when it is off or not registered.
+    /// How to ask once connected: the registered shortcut, or where to choose one.
     var askHint: String {
-        hotkey.inEffect.map { "Press \($0.display) to ask Nod." } ?? "Click the notch to ask Nod."
+        hotkey.inEffect.map { "Press \($0.display) to ask Nod." } ?? "Choose a shortcut below to ask Nod."
     }
 
     /// A test still running belongs to inputs that are gone: its result is dropped.
@@ -170,6 +165,7 @@ import ServiceManagement
         testRun += 1
         test = .idle
         savedCheck = nil
+        firstRunNextStep = nil
     }
 
     private var currentAddress: URL? { try? ConnectionSettings.normalize(server) }
@@ -202,6 +198,7 @@ import ServiceManagement
     /// One GET /api/state with the address and token in the fields.
     func runTest() {
         guard !usesEnvironment else { return }
+        firstRunNextStep = nil
         let address: URL
         do { address = try ConnectionSettings.normalize(server) } catch {
             test = .invalid(IslandModel.describe(error)); return
@@ -223,6 +220,7 @@ import ServiceManagement
 
     func save() {
         guard !usesEnvironment else { return }
+        firstRunNextStep = nil
         do {
             let address = try settings.save(server: server, token: tokenChange)
             // Setting the fields resets the test and the saved note, so the note comes last.

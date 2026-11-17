@@ -46,6 +46,7 @@ enum SettingsSnapshots {
               test: .done(.connected, address: ConnectionSettings.defaultURL), login: .enabled),
         Scene(name: "settings-first-run-unreachable", firstRun: .unreachable),
         Scene(name: "settings-first-run-token", firstRun: .tokenRequired),
+        Scene(name: "settings-first-run-tested", test: .done(.connected, address: ConnectionSettings.defaultURL), firstRun: .tokenRequired),
         Scene(name: "settings-saved-connected", server: "http://localhost:4310", storedToken: true, savedCheck: .connected),
         Scene(name: "settings-saved-connected-shortcut-off", server: "http://localhost:4310", storedToken: true,
               savedCheck: .connected, hotkey: .off),
@@ -89,9 +90,14 @@ enum SettingsSnapshots {
         model.tester = { _ in answer }
         model.server = scene.server
         model.tokenEntry = scene.tokenEntry
-        model.test = scene.test
         if let check = scene.firstRun {
             model.showFirstRun(check, address: ConnectionSettings.defaultURL, since: model.firstRunStamp)
+        }
+        if scene.firstRun != nil, case .done(let check, _) = scene.test {
+            model.tester = { _ in check }
+            model.runTest()
+        } else {
+            model.test = scene.test
         }
         // The real Save path: it writes only the in-memory stores and tries the saved connection with `tester`.
         if scene.savedCheck != nil { model.save() }
