@@ -3,11 +3,26 @@
 All notable changes to nodch are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## Unreleased
+## 0.4.0 — 2026-11-18
+
+### Added
+- First-run Settings explains how to connect to a Nod run from source or a self-hosted Nod. After a successful save
+  it shows the active shortcut, or where to choose one.
+- The island shows the destination host and port while you drag files over it. Files upload on drop and go with the
+  prompt when you press Return.
+
+### Changed
+- **Open Nod** brings work, questions, approvals and results to the connected server in your browser. A task opens
+  **Scheduled**. A question, approval or answer opens **Chat**. A general **Open Nod** follows your Settings choice.
+- A shortened approval offers **Review in Nod** and **Decline**. You can read and approve the full action in Nod.
 
 ### Fixed
-- The working card no longer says the same thing three times. Without a title from Nod, what Nod is doing becomes
-  the title, a titled card never repeats its title below it, and only the header spins.
+- Stop affects the displayed task. The wider action is labeled **Stop all work**.
+- Return keeps the destination and attached files it was meant for while dictation finishes. If the destination
+  changes, your draft stays. Repeated Return presses leave the first submission in place.
+- A choice sent with your words leaves unsent attachments in the draft. Only the active question offers choices.
+- If the connection changes before Mail or Photos delivers a dropped file, nodch asks you to drop it again.
+- The working card shows the current step once and keeps the spinner in the header.
 
 ## 0.3.0 — 2026-11-16
 
